@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useStore, setState, markTodoKind, getState } from '../lib/store.js'
 import { todayKey } from '../lib/date.js'
-import { CAT, requiredLessons, todayCurriculum, lessonById, SOURCE, ALL_LESSONS } from '../lib/curriculum.js'
+import { CAT, requiredLessons, skippedLessons, todayCurriculum, lessonById, SOURCE, ALL_LESSONS } from '../lib/curriculum.js'
 
 // Tick a lesson; when all of today's lessons are done, tick the to-do item too
 function toggle(id) {
@@ -39,7 +39,9 @@ export default function Curriculum({ go }) {
   const [cat, setCat] = useState('all')
   const [showAll, setShowAll] = useState(false)
   const target = profile.targetScore || 800
-  const required = useMemo(() => requiredLessons(target), [target])
+  const current = profile.currentScore || null
+  const required = useMemo(() => requiredLessons(target, current), [target, current])
+  const skipped = useMemo(() => new Set(skippedLessons(target, current).map((l) => l.id)), [target, current])
   const plan = todayCurriculum(profile, curri, today)
   const reqIds = new Set(required.map((l) => l.id))
   const pool = showAll ? ALL_LESSONS : required
@@ -65,10 +67,14 @@ export default function Curriculum({ go }) {
             </button>
           ))}
         </div>
-        <label className="row gap-s small"><input type="checkbox" style={{ width: 'auto' }} checked={showAll} onChange={(e) => setShowAll(e.target.checked)} /> Hiện cả các bài ngoài mục tiêu {target}</label>
+        {skipped.size > 0 && <p className="muted small">✅ Đã bỏ qua {skipped.size} bài ở trình độ thấp hơn điểm hiện tại ({current}). Bật ô dưới để xem lại.</p>}
+        <label className="row gap-s small"><input type="checkbox" style={{ width: 'auto' }} checked={showAll} onChange={(e) => setShowAll(e.target.checked)} /> Hiện cả các bài ngoài lộ trình (đã nắm hoặc vượt mục tiêu {target})</label>
         <ul className="todo-list">
           {shown.map((l) => (
-            <div key={l.id} className={!reqIds.has(l.id) ? 'extra' : ''}><LessonRow l={l} done={curri[l.id]} go={go} /></div>
+            <div key={l.id} className={!reqIds.has(l.id) ? 'extra' : ''}>
+              {skipped.has(l.id) && <span className="pill green known-tag">đã nắm</span>}
+              <LessonRow l={l} done={curri[l.id]} go={go} />
+            </div>
           ))}
         </ul>
         <p className="muted small">Nguồn: <a href={SOURCE.url} target="_blank" rel="noreferrer">{SOURCE.title}</a> — {SOURCE.author}, giấy phép {SOURCE.license}. App chỉ dùng phần TOEIC Listening & Reading.</p>

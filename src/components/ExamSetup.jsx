@@ -1,37 +1,58 @@
 import { useEffect, useState } from 'react'
 import { useStore, setState } from '../lib/store.js'
 import { todayKey, addDays, fromKey, diffDays } from '../lib/date.js'
-import { cefrFor, requiredLessons, requiredComps, todayCurriculum } from '../lib/curriculum.js'
+import { cefrFor, requiredLessons, requiredComps, skippedLessons, todayCurriculum, examInfo } from '../lib/curriculum.js'
+import { totalDays } from '../data/plan.js'
 
 const QUICK = [600, 700, 800, 900]
 // TOEIC scores go from 10 to 990 in steps of 5
 const fixScore = (n) => Math.min(990, Math.max(10, Math.round(n / 5) * 5))
 const fmtDate = (k) => fromKey(k).toLocaleDateString('vi-VN', { weekday: 'long', day: 'numeric', month: 'numeric', year: 'numeric' })
 
-// Exam date + target score form, with a summary of what the plan looks like
+// Score box: free typing, saved when it is a full score (3 digits) or when leaving the box.
+// Nothing is forced while typing, so "450" can be typed digit by digit.
+function ScoreInput({ value, onSave, placeholder, optional }) {
+  const [draft, setDraft] = useState(value ? String(value) : '')
+  useEffect(() => setDraft(value ? String(value) : ''), [value])
+  const type = (v) => {
+    const clean = v.replace(/\D/g, '').slice(0, 3)
+    setDraft(clean)
+    const n = Number(clean)
+    if (clean.length === 3 && n >= 100 && n <= 990) onSave(fixScore(n))
+  }
+  const leave = () => {
+    const n = Number(draft)
+    if (!draft) { if (optional) onSave(null); else setDraft(value ? String(value) : ''); return }
+    const fixed = fixScore(n)
+    onSave(fixed)
+    setDraft(String(fixed))
+  }
+  return (
+    <input type="text" inputMode="numeric" pattern="[0-9]*" maxLength={3} placeholder={placeholder} value={draft}
+      onChange={(e) => type(e.target.value)} onBlur={leave}
+      onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()} />
+  )
+}
+
+// Exam date + target score + current score, with a summary of the plan they give
 export default function ExamSetup({ compact }) {
   const { profile, curri } = useStore()
   const today = todayKey()
   const set = (patch) => setState((s) => ({ profile: { ...s.profile, ...patch } }))
   const target = profile.targetScore || 800
+  const current = profile.currentScore || null
   const cefr = cefrFor(target)
-  const cur = cefrFor(profile.currentScore)
+  const cur = cefrFor(current)
   const days = profile.examDate ? diffDays(today, profile.examDate) : null
-  const lessons = requiredLessons(target)
+  const lessons = requiredLessons(target, current)
+  const skipped = skippedLessons(target, current)
   const plan = todayCurriculum(profile, curri, today)
-  // Typed text is kept as-is while typing and saved when it is a valid score
-  const [draft, setDraft] = useState(String(target))
-  useEffect(() => setDraft(String(target)), [target])
-  const typeTarget = (v) => {
-    setDraft(v)
-    const n = Number(v)
-    if (n >= 100 && n <= 990) set({ targetScore: fixScore(n) }) // wait for 3 digits so "75" isn't saved while typing 750
-  }
-  const leaveTarget = () => {
-    const n = Number(draft)
-    if (draft && n >= 10) set({ targetScore: fixScore(n) })
-    setDraft(String(draft && n >= 10 ? fixScore(n) : target))
-  }
+  const { studyEnd } = examInfo(profile, today)
+
+  // How fast the score has to rise
+  const gap = current ? target - current : null
+  const weeksLeft = Math.max(1, (profile.examDate ? diffDays(today, profile.examDate) : totalDays(profile)) / 7)
+  const perWeek = gap > 0 ? Math.round(gap / weeksLeft) : 0
 
   return (
     <div className="card exam-setup">
@@ -41,26 +62,40 @@ export default function ExamSetup({ compact }) {
           <input type="date" min={addDays(today, 1)} value={profile.examDate || ''}
             onChange={(e) => set({ examDate: e.target.value || null })} />
         </label>
-        <label>🏆 Điểm mục tiêu (tự nhập 10–990)
-          <input type="number" inputMode="numeric" min={10} max={990} step={5} placeholder="VD: 750" value={draft}
-            onChange={(e) => typeTarget(e.target.value)}
-            onBlur={leaveTarget} onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()} />
+        <label>🏆 Điểm mục tiêu (10–990)
+          <ScoreInput value={target} onSave={(v) => set({ targetScore: v })} placeholder="VD: 750" />
           <span className="quick-scores">
             {QUICK.map((t) => (
               <button type="button" key={t} className={`chip ${t === target ? 'on' : ''}`} onClick={() => set({ targetScore: t })}>{t}</button>
             ))}
           </span>
         </label>
-        {!compact && <>
-          <label>📊 Điểm hiện tại (nếu có)
-            <input type="number" min={10} max={990} step={5} placeholder="VD: 450" value={profile.currentScore || ''}
-              onChange={(e) => set({ currentScore: e.target.value ? Math.min(990, Math.max(10, Number(e.target.value))) : null })} />
-          </label>
+        <label>📊 Điểm hiện tại (nếu có)
+          <ScoreInput value={current} onSave={(v) => set({ currentScore: v })} placeholder="VD: 450" optional />
+          <span className="muted small">Điểm thi thật hoặc đề thử gần nhất. Để trống nếu chưa biết.</span>
+        </label>
+        {!compact && (
           <label>🚩 Ngày bắt đầu học
             <input type="date" value={profile.startDate} onChange={(e) => e.target.value && set({ startDate: e.target.value })} />
           </label>
-        </>}
+        )}
       </div>
+
+      {current && (
+        <div className="score-path">
+          <div className="sp-node"><b>{current}</b><span>hiện tại{cur ? ` · ${cur.cefr}` : ''}</span></div>
+          <div className="sp-line"><span>{gap > 0 ? `+${gap} điểm` : 'đã đạt'}</span></div>
+          <div className="sp-node goal"><b>{target}</b><span>mục tiêu{cefr ? ` · ${cefr.cefr}` : ''}</span></div>
+        </div>
+      )}
+      {current && gap <= 0 && <p className="ok-box small">🎉 Điểm hiện tại đã đạt mục tiêu! Nâng mục tiêu lên (VD: {fixScore(Math.min(990, current + 100))}) để lộ trình tiếp tục thử thách bạn.</p>}
+      {current && gap > 0 && (
+        <p className="small">
+          📈 Cần tăng khoảng <b>{perWeek} điểm/tuần</b> trong {Math.round(weeksLeft)} tuần. Mục tiêu mỗi tuần trong lộ trình đi từ {current} lên {target}.
+          {skipped.length > 0 && <> App đã bỏ qua <b>{skipped.length} bài</b> ở trình độ bạn đã vượt qua.</>}
+        </p>
+      )}
+      {perWeek > 40 && <p className="warn small">⚠️ Mức tăng này khá gắt so với thời gian còn lại. Nên học nhiều hơn mỗi ngày, lùi ngày thi, hoặc đặt mục tiêu chặng giữa (VD: {fixScore(current + Math.round(weeksLeft * 30))}) rồi nâng dần.</p>}
 
       {profile.examDate ? (
         <div className="exam-summary">
@@ -68,7 +103,7 @@ export default function ExamSetup({ compact }) {
           <div className="small">
             <p>🗓️ {fmtDate(profile.examDate)}</p>
             <p>🎯 {target} điểm ≈ trình độ <b>{cefr?.cefr}</b> ({cefr?.from}–{cefr?.to}){cur && <> · hiện tại <b>{cur.cefr}</b></>}</p>
-            <p>📘 Cần học <b>{lessons.length}</b> bài trong khung kiến thức · đã xong {plan.doneCount} · khoảng <b>{plan.perDay.toFixed(1)}</b> bài/ngày, tuần cuối dành để làm đề.</p>
+            <p>📘 Cần học <b>{lessons.length}</b> bài trong khung kiến thức · đã xong {plan.doneCount} · khoảng <b>{plan.perDay.toFixed(1)}</b> bài/ngày đến {fromKey(studyEnd).toLocaleDateString('vi-VN')}, tuần cuối dành để làm đề.</p>
             {days !== null && days < 21 && <p className="warn">⚠️ Còn ít thời gian: app ưu tiên ôn chủ điểm yếu và làm đề. Có thể lùi ngày thi hoặc hạ mục tiêu để lịch nhẹ hơn.</p>}
             {plan.perDay > 4 && days >= 21 && <p className="warn">⚠️ Lịch khá dày (&gt; 4 bài/ngày). Cân nhắc lùi ngày thi hoặc hạ mục tiêu.</p>}
           </div>

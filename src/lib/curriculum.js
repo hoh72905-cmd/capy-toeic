@@ -23,17 +23,46 @@ export function requiredComps(target) {
   return CURRI.comps.filter((c) => c.from <= (c.scope === 'total' ? target : target / 2))
 }
 
+// Competencies already behind the learner: their score is past the start of the next band
+// in the same group (grammar bands use the total score; listening/reading use the section score ≈ total / 2).
+const groupOf = (c) => (c.scope === 'total' ? 'total' : /Listening/i.test(c.name) ? 'listening' : 'reading')
+export function masteredComps(current) {
+  if (!current) return new Set()
+  const out = new Set()
+  for (const g of ['total', 'listening', 'reading']) {
+    const bands = CURRI.comps.filter((c) => groupOf(c) === g).sort((a, b) => a.from - b.from)
+    const score = g === 'total' ? current : current / 2
+    bands.forEach((c, i) => { if (bands[i + 1] && bands[i + 1].from <= score) out.add(c.id) })
+  }
+  return out
+}
+
+// Lessons whose needed competencies are all already mastered
+function splitLessons(target, current) {
+  const need = new Set(requiredComps(target).map((c) => c.id))
+  const known = masteredComps(current)
+  const core = [], skipped = []
+  for (const l of CURRI.lessons) {
+    const mine = l.comps.filter((c) => need.has(c))
+    if (!mine.length) continue
+    if (mine.every((c) => known.has(c))) skipped.push(l); else core.push(l)
+  }
+  return { core, skipped }
+}
+export const skippedLessons = (target, current) => splitLessons(target, current).skipped
+
 // Lessons to learn for the target, in a sensible order:
 // categories interleaved, easier first, prerequisites placed before the lesson that needs them.
-export function requiredLessons(target) {
-  const comps = new Set(requiredComps(target).map((c) => c.id))
-  const core = CURRI.lessons.filter((l) => l.comps.some((c) => comps.has(c)))
+// With a current score, lessons below the learner's level are left out.
+export function requiredLessons(target, current = null) {
+  const { core, skipped } = splitLessons(target, current)
+  const skip = new Set(skipped.map((l) => l.id))
   const queues = Object.fromEntries(CAT_ORDER.map((c) => [c, core.filter((l) => l.cat === c).sort((a, b) => a.diff - b.diff)]))
   const placed = new Set(); const order = []
   const place = (l) => {
     if (placed.has(l.id)) return
     placed.add(l.id)
-    l.pre.forEach((p) => byId.get(p) && place(byId.get(p)))
+    l.pre.forEach((p) => byId.get(p) && !skip.has(p) && place(byId.get(p)))
     order.push(l)
   }
   let left = true
@@ -60,7 +89,7 @@ export function examInfo(profile, date = todayKey()) {
 // Today's lessons: split what is left evenly over the study days remaining
 export function todayCurriculum(profile, done, date = todayKey()) {
   const { studyEnd, target } = examInfo(profile, date)
-  const all = requiredLessons(target)
+  const all = requiredLessons(target, profile.currentScore)
   const remaining = all.filter((l) => !done[l.id] || done[l.id] >= date)
   const studyDays = Math.max(1, diffDays(date, studyEnd) + 1)
   const remainingW = remaining.reduce((a, l) => a + weight(l), 0)

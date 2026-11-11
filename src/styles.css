@@ -712,3 +712,14 @@ button.countdown:hover { transform: rotate(-4deg) scale(1.06); }
 .pw-field { position: relative; display: block; }
 .pw-field input { width: 100%; padding-right: 46px; }
 .pw-eye { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); border: 0; background: none; font-size: 1.1rem; cursor: pointer; padding: 6px; }
+
+/* Current → target score path */
+.score-path { display: flex; align-items: center; gap: 8px; margin: 4px 0 10px; }
+.sp-node { flex: none; min-width: 92px; padding: 8px 12px; border-radius: 16px; background: #fff; border: 2px solid var(--ring); box-shadow: 0 3px 0 var(--edge-blue, #9cd3f0); display: flex; flex-direction: column; align-items: center; }
+.sp-node b { font-family: 'Baloo 2', sans-serif; font-size: 1.5rem; line-height: 1.1; color: var(--blue-deep); }
+.sp-node span { font-size: .72rem; font-weight: 800; color: var(--muted); }
+.sp-node.goal { background: var(--yellow-soft); box-shadow: 0 3px 0 var(--yellow-deep); }
+.sp-node.goal b { color: var(--ink); }
+.sp-line { flex: 1; height: 8px; border-radius: 99px; background: linear-gradient(90deg, var(--blue), var(--yellow)); position: relative; }
+.sp-line span { position: absolute; left: 50%; top: -24px; transform: translateX(-50%); font-weight: 800; font-size: .8rem; white-space: nowrap; }
+.known-tag { font-size: .7rem; margin: 0 0 2px 6px; display: inline-block; }
