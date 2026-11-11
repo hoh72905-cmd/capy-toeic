@@ -1,0 +1,6 @@
+{
+  "appId": "com.capytoeic.app",
+  "appName": "Capy TOEIC",
+  "webDir": "dist",
+  "android": { "backgroundColor": "#FFF8E1" }
+}

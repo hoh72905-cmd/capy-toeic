@@ -1,0 +1,53 @@
+# Builds the Android APK for free on GitHub and publishes it as the "latest" release.
+name: Build Android APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Build web app
+        run: |
+          npm ci
+          npm run build
+          npx cap sync android
+
+      - name: Build APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Rename APK
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk capy-toeic.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: capy-toeic-apk
+          path: capy-toeic.apk
+
+      - name: Publish to "latest" release (direct download link for the phone)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest capy-toeic.apk --title "Capy TOEIC – bản mới nhất" --notes "Tải file capy-toeic.apk về điện thoại Android rồi mở để cài."

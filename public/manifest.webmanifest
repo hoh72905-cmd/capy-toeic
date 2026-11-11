@@ -1,0 +1,30 @@
+{
+  "name": "Capy TOEIC 800",
+  "short_name": "Capy TOEIC",
+  "description": "To-do list, lộ trình TOEIC 800 trong 3 tháng, flashcard, nghe chép",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FFF8E1",
+  "theme_color": "#FFD54F",
+  "lang": "vi",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
