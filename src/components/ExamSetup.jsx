@@ -1,8 +1,11 @@
+import { useEffect, useState } from 'react'
 import { useStore, setState } from '../lib/store.js'
 import { todayKey, addDays, fromKey, diffDays } from '../lib/date.js'
 import { cefrFor, requiredLessons, requiredComps, todayCurriculum } from '../lib/curriculum.js'
 
-const TARGETS = [500, 550, 600, 650, 700, 750, 800, 850, 900, 950, 990]
+const QUICK = [600, 700, 800, 900]
+// TOEIC scores go from 10 to 990 in steps of 5
+const fixScore = (n) => Math.min(990, Math.max(10, Math.round(n / 5) * 5))
 const fmtDate = (k) => fromKey(k).toLocaleDateString('vi-VN', { weekday: 'long', day: 'numeric', month: 'numeric', year: 'numeric' })
 
 // Exam date + target score form, with a summary of what the plan looks like
@@ -16,6 +19,19 @@ export default function ExamSetup({ compact }) {
   const days = profile.examDate ? diffDays(today, profile.examDate) : null
   const lessons = requiredLessons(target)
   const plan = todayCurriculum(profile, curri, today)
+  // Typed text is kept as-is while typing and saved when it is a valid score
+  const [draft, setDraft] = useState(String(target))
+  useEffect(() => setDraft(String(target)), [target])
+  const typeTarget = (v) => {
+    setDraft(v)
+    const n = Number(v)
+    if (n >= 100 && n <= 990) set({ targetScore: fixScore(n) }) // wait for 3 digits so "75" isn't saved while typing 750
+  }
+  const leaveTarget = () => {
+    const n = Number(draft)
+    if (draft && n >= 10) set({ targetScore: fixScore(n) })
+    setDraft(String(draft && n >= 10 ? fixScore(n) : target))
+  }
 
   return (
     <div className="card exam-setup">
@@ -25,10 +41,15 @@ export default function ExamSetup({ compact }) {
           <input type="date" min={addDays(today, 1)} value={profile.examDate || ''}
             onChange={(e) => set({ examDate: e.target.value || null })} />
         </label>
-        <label>🏆 Điểm mục tiêu
-          <select value={target} onChange={(e) => set({ targetScore: Number(e.target.value) })}>
-            {TARGETS.map((t) => <option key={t} value={t}>{t}</option>)}
-          </select>
+        <label>🏆 Điểm mục tiêu (tự nhập 10–990)
+          <input type="number" inputMode="numeric" min={10} max={990} step={5} placeholder="VD: 750" value={draft}
+            onChange={(e) => typeTarget(e.target.value)}
+            onBlur={leaveTarget} onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()} />
+          <span className="quick-scores">
+            {QUICK.map((t) => (
+              <button type="button" key={t} className={`chip ${t === target ? 'on' : ''}`} onClick={() => set({ targetScore: t })}>{t}</button>
+            ))}
+          </span>
         </label>
         {!compact && <>
           <label>📊 Điểm hiện tại (nếu có)

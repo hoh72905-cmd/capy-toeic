@@ -6,7 +6,7 @@ const BACKUP_KEY = 'capy-toeic-backup' // copy of the last good data, refreshed 
 const BROKEN_KEY = 'capy-toeic-broken' // unreadable data is kept here instead of being overwritten
 
 const initial = () => ({
-  profile: { name: 'Quyên', startDate: todayKey(), examDate: null, targetScore: 800, currentScore: null, dailyNew: 15 },
+  profile: { name: 'Quyên', startDate: todayKey(), examDate: null, targetScore: 800, currentScore: null, dailyNew: 15, goals: [] }, // goals: learner's own daily goals [{ id, text, ts }]
   todos: {},
   activity: {},
   cards: {},
@@ -19,6 +19,7 @@ const initial = () => ({
   customLessons: [],
   curri: {}, // Kaggle curriculum lessons done: { lessonId: date }
   reminders: [], // personal reminders: exams, deadlines, notes
+  goalLog: {}, // own daily goals ticked off: { day: [goalId] }
   toeicDay: null, // last date the TOEIC tasks were added to the to-do list
   savedAt: null,
 })

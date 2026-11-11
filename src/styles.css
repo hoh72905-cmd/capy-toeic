@@ -693,3 +693,12 @@ button.countdown:hover { transform: rotate(-4deg) scale(1.06); }
 .sync-invite { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 18px; background: linear-gradient(90deg, var(--blue-soft), #fff); border: 2.5px solid #9fd8f5; box-shadow: 0 4px 0 #7cc4ea; }
 .sync-invite .big-ico { font-size: 1.7rem; animation: floaty 3s ease-in-out infinite; }
 .version { text-align: center; }
+
+/* Own goals + free target score */
+.my-goals { display: flex; flex-direction: column; gap: 8px; margin-bottom: 6px; }
+.my-goals .todo-list { margin: 0; }
+.my-goals .todo-list li { border-left-color: var(--blue); }
+.goal-ideas .chip { font-size: .8rem; padding: 4px 10px; }
+.goal-sub { margin: 10px 0 6px; font-weight: 800; font-size: .85rem; color: var(--muted); }
+.quick-scores { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+.quick-scores .chip { padding: 3px 10px; font-size: .8rem; }

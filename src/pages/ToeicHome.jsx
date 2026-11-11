@@ -18,7 +18,7 @@ const KIND_PAGE = { flash: 'flash', listen: 'listen', quiz: 'practice', vocab: '
 
 // Overview of the TOEIC area: status, today's study tasks, week progress, review
 export default function ToeicHome({ go }) {
-  const { profile, todos, cards, topics, listenDone, curri } = useStore()
+  const { profile, todos, cards, topics, listenDone, curri, goalLog } = useStore()
   const today = todayKey()
   const info = planInfo(profile, today)
   const picks = dayPicks(profile, today)
@@ -27,6 +27,8 @@ export default function ToeicHome({ go }) {
   const list = (todos[today] || []).filter(isToeic)
   const [text, setText] = useState('')
   const streak = useStreak()
+  const goals = profile.goals || []
+  const goalsDone = goals.filter((g) => (goalLog[today] || []).includes(g.id)).length
 
   const update = (fn) => setState((st) => ({ todos: { ...st.todos, [today]: fn(st.todos[today] || []) } }))
   const add = () => {
@@ -125,15 +127,25 @@ export default function ToeicHome({ go }) {
 
         <div className="stack">
           <section className="card tint-blue">
-            <Title icon="🎯">Mục tiêu học hôm nay</Title>
-            <ul className="goal-list">
-              <li onClick={() => go('flash')}><span>🃏</span> Ôn {dueCards} thẻ đến hạn + {profile.dailyNew} từ mới</li>
-              <li onClick={() => go('practice', { ref: picks.topic })}><span>🧠</span> Ngữ pháp: {grammarName(picks.topic)}</li>
-              <li onClick={() => go('listen', { ref: picks.lesson.id })}><span>🎧</span> Nghe chép: {picks.lesson.title} (~6p)</li>
-              <li onClick={() => go('vocab', { ref: picks.family.id })}><span>📚</span> Word family: <b>{picks.family.words[0][0]}</b></li>
-              {curriToday.list.length > 0 && <li onClick={() => go('plan', { ref: 'curri' })}><span>📘</span> Khung kiến thức: {curriToday.list.length} bài · đã xong {curriToday.doneCount}/{curriToday.total}</li>}
-            </ul>
-            <p className="tip">💡 {info.week.tip}</p>
+            <div className="row between">
+              <Title icon="🎯">Mục tiêu học hôm nay</Title>
+              {goals.length > 0 && <span className="pill blue">{goalsDone}/{goals.length}</span>}
+            </div>
+            <MyGoals today={today} />
+            {!profile.hideSuggest && <>
+              <p className="goal-sub">✨ Gợi ý từ lộ trình</p>
+              <ul className="goal-list">
+                <li onClick={() => go('flash')}><span>🃏</span> Ôn {dueCards} thẻ đến hạn + {profile.dailyNew} từ mới</li>
+                <li onClick={() => go('practice', { ref: picks.topic })}><span>🧠</span> Ngữ pháp: {grammarName(picks.topic)}</li>
+                <li onClick={() => go('listen', { ref: picks.lesson.id })}><span>🎧</span> Nghe chép: {picks.lesson.title} (~6p)</li>
+                <li onClick={() => go('vocab', { ref: picks.family.id })}><span>📚</span> Word family: <b>{picks.family.words[0][0]}</b></li>
+                {curriToday.list.length > 0 && <li onClick={() => go('plan', { ref: 'curri' })}><span>📘</span> Khung kiến thức: {curriToday.list.length} bài · đã xong {curriToday.doneCount}/{curriToday.total}</li>}
+              </ul>
+              <p className="tip">💡 {info.week.tip}</p>
+            </>}
+            <button className="link small" onClick={() => setState((st) => ({ profile: { ...st.profile, hideSuggest: !st.profile.hideSuggest } }))}>
+              {profile.hideSuggest ? '✨ Hiện gợi ý từ lộ trình' : 'Ẩn gợi ý, chỉ giữ mục tiêu của mình'}
+            </button>
           </section>
 
           <section className="card tint-green">
@@ -167,6 +179,91 @@ export default function ToeicHome({ go }) {
           </section>
         </div>
       </div>
+    </div>
+  )
+}
+
+const GOAL_IDEAS = ['Học 20 từ mới', 'Nghe 30 phút', 'Làm 30 câu Part 5', 'Đọc 1 bài Part 7', 'Chép chính tả 1 bài']
+
+// The learner's own goals: repeat every day, ticked off per day
+function MyGoals({ today }) {
+  const { profile, goalLog } = useStore()
+  const goals = profile.goals || []
+  const doneIds = goalLog[today] || []
+  const [text, setText] = useState('')
+  const [editing, setEditing] = useState(null) // { id, text }
+
+  const setGoals = (fn) => setState((st) => ({ profile: { ...st.profile, goals: fn(st.profile.goals || []) } }))
+  const add = (t = text) => {
+    const v = t.trim()
+    if (!v) return
+    setGoals((l) => [...l, { id: uid(), ts: Date.now(), text: v }])
+    setText('')
+  }
+  const toggle = (g, e) => {
+    const was = doneIds.includes(g.id)
+    setState((st) => {
+      const cur = st.goalLog?.[today] || []
+      return { goalLog: { ...st.goalLog, [today]: was ? cur.filter((x) => x !== g.id) : [...cur, g.id] } }
+    })
+    if (!was) {
+      if (goals.every((x) => x.id === g.id || doneIds.includes(x.id))) confetti(undefined, undefined, 70)
+      else confettiAt(e.target.closest('li')?.querySelector('.check'), 14)
+    }
+  }
+  const saveEdit = () => {
+    const v = editing.text.trim()
+    if (v) setGoals((l) => l.map((x) => (x.id === editing.id ? { ...x, text: v } : x)))
+    setEditing(null)
+  }
+  const remove = (g) => {
+    setGoals((l) => l.filter((x) => x.id !== g.id))
+    setState((st) => ({ goalLog: { ...st.goalLog, [today]: (st.goalLog?.[today] || []).filter((x) => x !== g.id) } }))
+  }
+
+  return (
+    <div className="my-goals">
+      {goals.length > 0 && (
+        <ul className="todo-list">
+          {goals.map((g) => {
+            const done = doneIds.includes(g.id)
+            if (editing?.id === g.id) {
+              return (
+                <li key={g.id}>
+                  <input autoFocus value={editing.text} onChange={(e) => setEditing({ ...editing, text: e.target.value })}
+                    onKeyDown={(e) => { if (e.key === 'Enter') saveEdit(); if (e.key === 'Escape') setEditing(null) }} />
+                  <div className="todo-actions"><button className="btn sm yellow" onClick={saveEdit}>Lưu</button></div>
+                </li>
+              )
+            }
+            return (
+              <li key={g.id} className={done ? 'done' : ''}>
+                <label>
+                  <input type="checkbox" checked={done} onChange={(e) => toggle(g, e)} />
+                  <span className="check" />
+                  <span className="todo-text">{g.text}</span>
+                </label>
+                <div className="todo-actions">
+                  <button className="icon-btn sm" title="Sửa" onClick={() => setEditing({ id: g.id, text: g.text })}>✏️</button>
+                  <button className="icon-btn sm" title="Xóa" onClick={() => remove(g)}>🗑️</button>
+                </div>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+      {!goals.length && <p className="muted small">Tự đặt mục tiêu cho mỗi ngày — tick xong là capybara ăn mừng 🎉. Mục tiêu lặp lại hằng ngày, sửa/xóa lúc nào cũng được.</p>}
+      <div className="row gap-s">
+        <input value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} placeholder="Mục tiêu của bạn, VD: Học 20 từ mới" />
+        <button className="btn blue" onClick={() => add()}>Thêm</button>
+      </div>
+      {goals.length < 3 && (
+        <div className="chips goal-ideas">
+          {GOAL_IDEAS.filter((t) => !goals.some((g) => g.text === t)).slice(0, 4).map((t) => (
+            <button key={t} className="chip" onClick={() => add(t)}>+ {t}</button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
