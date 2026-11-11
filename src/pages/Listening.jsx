@@ -68,7 +68,7 @@ function AddLesson({ onClose }) {
   const save = () => {
     const lines = text.split('\n').map((x) => x.trim()).filter(Boolean)
     if (!lines.length) return
-    const lesson = { id: `c-${uid()}`, title: title || 'Bài của tôi', part: 'Tự tạo', scene: '🌟', accent, level: 1, s: lines.slice(0, 15).map((l) => [l, '']), custom: true }
+    const lesson = { id: `c-${uid()}`, ts: Date.now(), title: title || 'Bài của tôi', part: 'Tự tạo', scene: '🌟', accent, level: 1, s: lines.slice(0, 15).map((l) => [l, '']), custom: true }
     setState((s) => ({ customLessons: [...s.customLessons, lesson] }))
     onClose()
   }

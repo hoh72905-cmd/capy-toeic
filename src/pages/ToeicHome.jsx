@@ -31,7 +31,7 @@ export default function ToeicHome({ go }) {
   const update = (fn) => setState((st) => ({ todos: { ...st.todos, [today]: fn(st.todos[today] || []) } }))
   const add = () => {
     if (!text.trim()) return
-    update((l) => [...l, { id: uid(), text: text.trim(), done: false, kind: 'custom', toeic: true }])
+    update((l) => [...l, { id: uid(), ts: Date.now(), text: text.trim(), done: false, kind: 'custom', toeic: true }])
     setText('')
   }
   const toggle = (t, e) => {

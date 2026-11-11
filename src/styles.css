@@ -671,3 +671,24 @@ button.countdown:hover { transform: rotate(-4deg) scale(1.06); }
 .host-warn { margin: 10px 16px 0; padding: 10px 14px; border-radius: 14px; background: #fff1c2; border: 2px solid var(--yellow-deep); font-size: .9rem; }
 @media (min-width: 900px) { .host-warn { margin: 20px 32px 0; } }
 .word-chip { display: inline-flex; align-items: center; gap: 4px; padding-right: 4px; }
+
+/* Cloud sync */
+.sync-chip { display: inline-flex; align-items: center; gap: 6px; border: 2px solid var(--ring); background: #fff; border-radius: 999px; padding: 4px 10px; font-weight: 800; font-size: .78rem; box-shadow: 0 2px 0 var(--edge); }
+.sync-chip.ok { border-color: #a9d8a4; color: #2f7d2a; }
+.sync-chip.busy { border-color: #9fd8f5; color: var(--blue-deep); }
+.sync-chip.warn { border-color: var(--yellow-deep); }
+.sync-chip.bad { border-color: var(--pink-deep); color: var(--pink-deep); }
+.sidebar .sync-chip { justify-content: center; padding: 8px 10px; font-size: .85rem; }
+@media (max-width: 899px) { .topbar .sync-text { display: none; } .sidebar .sync-chip { display: none; } }
+.spin { display: inline-block; animation: spin 1.2s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg) } }
+.sync-status { display: flex; gap: 12px; align-items: center; padding: 10px 12px; border-radius: 16px; background: #fff; border: 2px solid var(--ring); margin-bottom: 8px; }
+.sync-status > span { font-size: 1.6rem; }
+.sync-status.ok { border-color: #a9d8a4; }
+.sync-status.bad { border-color: var(--pink-deep); }
+.account-intro p { margin: 0; }
+.account-msg { font-weight: 700; color: var(--blue-deep); }
+.remote-toast { position: fixed; left: 50%; top: 14px; transform: translateX(-50%); z-index: 70; background: #fff; border: 2.5px solid var(--blue); border-radius: 999px; padding: 8px 16px; font-weight: 800; box-shadow: 0 4px 0 #3aa8dd, 0 12px 24px rgba(58, 168, 221, .3); animation: toast-in .35s cubic-bezier(.3, 1.6, .5, 1); }
+@keyframes toast-in { from { transform: translate(-50%, -30px); opacity: 0 } }
+.sync-invite { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 18px; background: linear-gradient(90deg, var(--blue-soft), #fff); border: 2.5px solid #9fd8f5; box-shadow: 0 4px 0 #7cc4ea; }
+.sync-invite .big-ico { font-size: 1.7rem; animation: floaty 3s ease-in-out infinite; }

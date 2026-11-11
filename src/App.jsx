@@ -14,6 +14,8 @@ import SelectionPopup from './components/SelectionPopup.jsx'
 import QuickNote from './components/QuickNote.jsx'
 import { useStreak } from './lib/hooks.js'
 import { ensureToeicToday } from './lib/today.js'
+import { initCloud, flushNow } from './lib/cloud.js'
+import { SyncChip, RemoteToast } from './components/Account.jsx'
 
 // Everything about studying TOEIC lives under one section
 const TOEIC_NAV = [
@@ -49,7 +51,11 @@ export default function App() {
   // Add today's TOEIC tasks once a day (also when the app is reopened on a new day)
   useEffect(() => {
     ensureToeicToday()
-    const on = () => document.visibilityState === 'visible' && ensureToeicToday()
+    initCloud()
+    const on = () => {
+      if (document.visibilityState === 'visible') ensureToeicToday()
+      else flushNow() // push unsaved changes before the app goes to the background
+    }
     document.addEventListener('visibilitychange', on)
     return () => document.removeEventListener('visibilitychange', on)
   }, [])
@@ -106,6 +112,7 @@ export default function App() {
           </div>
           <MainBtn id="settings" icon="⚙️" label="Cài đặt" tone="t-pink" on={page === 'settings'} />
         </nav>
+        <SyncChip onClick={() => go('settings')} />
         <div className="side-streak"><span className="flame">🔥</span> {streak} ngày liên tiếp</div>
       </aside>
 
@@ -113,7 +120,10 @@ export default function App() {
         <div className="sticky-head">
           <header className="topbar">
             <div className="brand" onClick={() => go('home')}><Mascot size={38} /><b>Capy TOEIC</b></div>
-            <span className="pill streak-pill"><span className="flame">🔥</span> {streak}</span>
+            <div className="row gap-s">
+              <SyncChip onClick={() => go('settings')} />
+              <span className="pill streak-pill"><span className="flame">🔥</span> {streak}</span>
+            </div>
           </header>
           {inToeic && (
             <nav className="subnav" aria-label="Mục TOEIC">
@@ -131,6 +141,7 @@ export default function App() {
         )}
         <main>{content}</main>
       </div>
+      <RemoteToast />
       <SelectionPopup />
       <QuickNote />
     </div>

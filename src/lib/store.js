@@ -87,12 +87,26 @@ if (typeof window !== 'undefined') {
 
 export function getState() { return state }
 
+// Other modules (cloud sync) can watch every local change
+const changeHooks = new Set()
+export function onLocalChange(fn) { changeHooks.add(fn); return () => changeHooks.delete(fn) }
+
 export function setState(updater) {
+  const prev = state
   const next = typeof updater === 'function' ? updater(state) : updater
   state = { ...state, ...next }
   save()
   listeners.forEach((l) => l())
+  changeHooks.forEach((fn) => fn(prev, state))
 }
+
+// Replace everything with data that came from the cloud (does not echo back to the cloud)
+export function replaceFromCloud(data) {
+  state = upgrade({ ...data, savedAt: state.savedAt })
+  save()
+  listeners.forEach((l) => l())
+}
+export { upgrade }
 
 export function useStore(selector = (s) => s) {
   return useSyncExternalStore(
@@ -133,11 +147,15 @@ export function exportData() {
 export function importData(text) {
   const parsed = JSON.parse(text)
   if (!parsed || typeof parsed !== 'object' || !parsed.profile) throw new Error('File không hợp lệ')
+  const prev = state
   state = upgrade(parsed)
   save()
   listeners.forEach((l) => l())
+  changeHooks.forEach((fn) => fn(prev, state))
 }
 
 export function resetAll() {
+  const prev = state
   state = initial(); save(); listeners.forEach((l) => l())
+  changeHooks.forEach((fn) => fn(prev, state))
 }

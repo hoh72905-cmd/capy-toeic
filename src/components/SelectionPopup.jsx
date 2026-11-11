@@ -54,7 +54,7 @@ export default function SelectionPopup() {
   const meaning = result.local ? `${result.local.vi} (${result.local.pos})` : result.vi
 
   const save = () => {
-    setState((s) => ({ saved: [{ id: uid(), text: sel.text, meaning: meaning || '', date: todayKey(), box: 0, due: todayKey() }, ...s.saved] }))
+    setState((s) => ({ saved: [{ id: uid(), text: sel.text, meaning: meaning || '', date: todayKey(), ts: Date.now(), box: 0, due: todayKey() }, ...s.saved] }))
     setSaved(true)
   }
 

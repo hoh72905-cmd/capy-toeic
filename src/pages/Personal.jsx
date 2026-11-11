@@ -7,6 +7,7 @@ import { isToeic } from '../lib/today.js'
 import { useStreak, greeting } from '../lib/hooks.js'
 import { confetti, confettiAt } from '../lib/confetti.js'
 import { examInfo } from '../lib/curriculum.js'
+import { useCloud } from '../lib/cloud.js'
 
 const TAGS = [
   { id: 'life', icon: '🏡', name: 'Cá nhân', color: '#ffd54f' },
@@ -107,6 +108,8 @@ export default function Personal({ go }) {
         </div>
       </section>
 
+      <SyncInvite go={go} />
+
       {urgent.length > 0 && (
         <div className="urgent">
           <span className="bell">🔔</span>
@@ -145,7 +148,7 @@ function TodoCard() {
   const update = (fn, day = sel) => setState((st) => ({ todos: { ...st.todos, [day]: fn(st.todos[day] || []) } }))
   const add = (txt = text, tg = tag) => {
     if (!txt.trim()) return
-    update((l) => [...l, { id: uid(), text: txt.trim(), done: false, kind: 'custom', tag: tg, star, time: time || undefined }])
+    update((l) => [...l, { id: uid(), ts: Date.now(), text: txt.trim(), done: false, kind: 'custom', tag: tg, star, time: time || undefined }])
     setText(''); setStar(false); setTime('')
   }
   const toggle = (t, e) => {
@@ -163,7 +166,7 @@ function TodoCard() {
   const moveLeftover = () => setState((st) => ({
     todos: {
       ...st.todos,
-      [today]: [...(st.todos[today] || []), ...leftover.map((t) => ({ ...t, id: uid() }))],
+      [today]: [...(st.todos[today] || []), ...leftover.map((t) => ({ ...t, id: uid(), ts: Date.now() }))],
       [yesterday]: st.todos[yesterday].map((t) => (leftover.find((x) => x.id === t.id) ? { ...t, moved: true } : t)),
     },
   }))
@@ -270,7 +273,7 @@ function Reminders({ items, go }) {
   const [kind, setKind] = useState('deadline')
   const add = () => {
     if (!title.trim()) return
-    setState((s) => ({ reminders: [...s.reminders, { id: uid(), title: title.trim(), date: date || null, kind, done: false }] }))
+    setState((s) => ({ reminders: [...s.reminders, { id: uid(), title: title.trim(), date: date || null, kind, done: false, ts: Date.now() }] }))
     setTitle(''); setDate('')
   }
   const patch = (id, p) => setState((s) => ({ reminders: s.reminders.map((r) => (r.id === id ? { ...r, ...p } : r)) }))
@@ -341,5 +344,19 @@ function ToeicMini({ go }) {
         <button className="btn blue" onClick={() => go('toeic')}>Vào học ➜</button>
       </div>
     </section>
+  )
+}
+
+function SyncInvite({ go }) {
+  const c = useCloud()
+  const [hide, setHide] = useState(() => { try { return localStorage.getItem('capy-sync-invite') === 'no' } catch { return false } })
+  if (c.email || c.status !== 'off' || hide) return null
+  return (
+    <div className="sync-invite">
+      <span className="big-ico">☁️</span>
+      <div className="grow"><b>Đồng bộ web ↔ app</b><div className="small">Đăng nhập một tài khoản để học ở đâu cũng thấy cùng dữ liệu.</div></div>
+      <button className="btn blue sm" onClick={() => go('settings')}>Đăng nhập</button>
+      <button className="icon-btn sm" title="Ẩn" onClick={() => { setHide(true); try { localStorage.setItem('capy-sync-invite', 'no') } catch { /* ignore */ } }}>✕</button>
+    </div>
   )
 }

@@ -45,7 +45,7 @@ function FamilyCard({ f, open, onToggle }) {
   const isSaved = (w) => saved.some((s) => s.text === w)
   const save = (w, vi) => {
     if (isSaved(w)) return
-    setState((s) => ({ saved: [{ id: uid(), text: w, meaning: vi, date: todayKey(), box: 0, due: todayKey() }, ...s.saved] }))
+    setState((s) => ({ saved: [{ id: uid(), text: w, meaning: vi, date: todayKey(), ts: Date.now(), box: 0, due: todayKey() }, ...s.saved] }))
   }
   return (
     <div className={`card family ${open ? 'open' : ''}`}>

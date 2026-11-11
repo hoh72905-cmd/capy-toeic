@@ -3,6 +3,7 @@ import { useStore, setState, exportData, importData, resetAll, storage } from '.
 import { todayKey } from '../lib/date.js'
 import Title from '../components/Title.jsx'
 import ExamSetup from '../components/ExamSetup.jsx'
+import Account from '../components/Account.jsx'
 
 export default function Settings() {
   const { profile, savedAt } = useStore()
@@ -25,6 +26,7 @@ export default function Settings() {
   return (
     <div className="page">
       <div className="page-head"><h1>⚙️ Cài đặt</h1></div>
+      <Account />
       <div className="card form tint-yellow">
         <Title icon="🙋">Hồ sơ</Title>
         <label>Tên hiển thị<input value={profile.name} onChange={(e) => set('name', e.target.value)} /></label>
@@ -37,7 +39,7 @@ export default function Settings() {
           {storage.ok ? '💾 Tự động lưu mỗi khi bạn học' : '⚠️ Không lưu được dữ liệu (bộ nhớ đầy hoặc đang ở chế độ ẩn danh)'}
           {savedAt ? ` · lần lưu gần nhất ${new Date(savedAt).toLocaleString('vi-VN')}` : ''}
         </p>
-        <p className="muted small">Tiến độ được lưu ngay trên thiết bị và trình duyệt bạn đang dùng (kèm một bản dự phòng mỗi ngày), nên tải lại trang hay cập nhật web đều không mất. Mỗi máy/trình duyệt giữ dữ liệu riêng: muốn chuyển sang máy khác, tải bản sao lưu rồi khôi phục ở máy kia. Đừng xóa dữ liệu duyệt web của trang này.</p>
+        <p className="muted small">Tiến độ được lưu ngay trên thiết bị và trình duyệt bạn đang dùng (kèm một bản dự phòng mỗi ngày), nên tải lại trang hay cập nhật web đều không mất. Muốn web và app dùng chung dữ liệu: đăng nhập tài khoản ở mục “Tài khoản & đồng bộ” phía trên. Bản sao lưu bên dưới là lớp bảo vệ thêm. Đừng xóa dữ liệu duyệt web của trang này.</p>
         <div className="row gap-s wrap">
           <button className="btn blue" onClick={download}>⬇️ Tải bản sao lưu</button>
           <button className="btn" onClick={() => fileRef.current?.click()}>⬆️ Khôi phục từ file</button>

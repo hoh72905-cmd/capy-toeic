@@ -1,5 +1,5 @@
 import { getState, setState } from './store.js'
-import { todayKey, uid } from './date.js'
+import { todayKey } from './date.js'
 import { tasksFor } from '../data/plan.js'
 import { todayCurriculum } from './curriculum.js'
 
@@ -13,10 +13,11 @@ export function ensureToeicToday() {
   const today = todayKey()
   if (s.toeicDay === today) return
   if ((s.todos[today] || []).some((t) => t.auto)) { setState({ toeicDay: today }); return }
-  const auto = tasksFor(s.profile, today).map((t) => ({ ...t, id: uid(), done: false, auto: true }))
+  // Same ids on every device (web + app), so syncing never duplicates them
+  const auto = tasksFor(s.profile, today).map((t, i) => ({ ...t, id: `auto-${today}-${i}`, ts: i, done: false, auto: true }))
   const cur = todayCurriculum(s.profile, s.curri, today)
   if (cur.list.length) {
-    auto.push({ id: uid(), done: false, auto: true, kind: 'curri', ref: 'curri', min: cur.list.length * 8, text: `📘 Khung kiến thức: ${cur.list.length} bài hôm nay` })
+    auto.push({ id: `auto-${today}-curri`, ts: 50, done: false, auto: true, kind: 'curri', ref: 'curri', min: cur.list.length * 8, text: `📘 Khung kiến thức: ${cur.list.length} bài hôm nay` })
   }
   setState((st) => ({ toeicDay: today, todos: { ...st.todos, [today]: [...(st.todos[today] || []), ...auto] } }))
 }

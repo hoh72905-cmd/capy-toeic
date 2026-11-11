@@ -30,6 +30,12 @@ App chia làm 2 khu trên thanh menu:
 ### ⚙️ Cài đặt
 - Tên hiển thị, ngày thi & mục tiêu, sao lưu/khôi phục dữ liệu.
 
+## Đồng bộ web ↔ app
+- Vào **Cài đặt → Tài khoản & đồng bộ**, tạo tài khoản (email + mật khẩu) một lần, rồi đăng nhập cùng tài khoản đó trên web và app.
+- Mọi thay đổi (to-do, nhắc nhở, flashcard, bài nghe, tiến độ…) hiện lên thiết bị kia sau khoảng 1 giây. Mất mạng vẫn dùng bình thường, có mạng lại sẽ tự đồng bộ.
+- Lần đầu đăng nhập trên một máy đã có dữ liệu: dữ liệu trên máy và trên mây được gộp lại, không mất bên nào.
+- Hạ tầng: Firebase (Firestore + Authentication) dự án `toeic-28241`, gói miễn phí. Luật bảo mật trong `firestore.rules`: mỗi tài khoản chỉ đọc/ghi được dữ liệu của chính mình. Cập nhật luật: `npx firebase-tools deploy --only firestore:rules`.
+
 ## Chạy trên máy
 ```bash
 npm install
