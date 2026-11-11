@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import Title from './Title.jsx'
 import Mascot from './Mascot.jsx'
-import { useCloud, signIn, signInWithGoogle, signOutCloud, resetPassword, authMessage, isCancel } from '../lib/cloud.js'
+import { useCloud, signIn, signInWithGoogle, signOutCloud, resetPassword, authMessage, isCancel, appNeedsUpdate, APK_URL } from '../lib/cloud.js'
 
 const STATUS = {
   off: { icon: '☁️', text: 'Chưa đồng bộ', cls: 'off' },
@@ -28,6 +28,15 @@ export function GoogleButton({ small, onError }) {
     setBusy(true)
     try { await signInWithGoogle() } catch (e) { if (!isCancel(e)) onError?.(authMessage(e)) }
     setBusy(false)
+  }
+  if (appNeedsUpdate()) {
+    // Old Android app: Google sign-in needs the new APK (install over the old one, data is kept)
+    return (
+      <div className="update-box">
+        <p className="small"><b>📲 Cập nhật app để đăng nhập bằng Google.</b> Tải bản mới rồi cài đè lên app này — không cần gỡ, dữ liệu giữ nguyên.</p>
+        <a className={`btn google-btn ${small ? 'sm' : ''}`} href={APK_URL} target="_blank" rel="noreferrer">⬇️ Tải app bản mới</a>
+      </div>
+    )
   }
   return (
     <button type="button" className={`btn google-btn ${small ? 'sm' : ''}`} onClick={go} disabled={busy}>

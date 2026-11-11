@@ -723,3 +723,6 @@ button.countdown:hover { transform: rotate(-4deg) scale(1.06); }
 .sp-line { flex: 1; height: 8px; border-radius: 99px; background: linear-gradient(90deg, var(--blue), var(--yellow)); position: relative; }
 .sp-line span { position: absolute; left: 50%; top: -24px; transform: translateX(-50%); font-weight: 800; font-size: .8rem; white-space: nowrap; }
 .known-tag { font-size: .7rem; margin: 0 0 2px 6px; display: inline-block; }
+.update-box { background: var(--yellow-soft); border: 2px dashed var(--yellow-deep); border-radius: 16px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.update-box p { margin: 0; }
+.update-box .btn { text-decoration: none; text-align: center; }

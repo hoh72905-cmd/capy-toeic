@@ -198,11 +198,20 @@ const AUTH_ERR = {
   'auth/internal-error': 'Máy chủ đăng nhập đang bận, thử lại sau ít phút.',
   'auth/popup-blocked': 'Trình duyệt chặn cửa sổ Google — cho phép cửa sổ bật lên rồi thử lại.',
   'load-failed': 'Không tải được phần đăng nhập. Kiểm tra mạng rồi tải lại trang.',
+  'app-outdated': 'App trên máy là bản cũ, chưa có đăng nhập Google. Tải bản mới và cài đè (không cần gỡ app) — xem nút bên dưới.',
+  'google-config': 'Google từ chối app này (cấu hình khóa ứng dụng). Hãy chụp màn hình gửi người làm app.',
+  'google-no-account': 'Máy chưa có tài khoản Google nào. Vào Cài đặt điện thoại → Tài khoản → Thêm tài khoản Google, rồi thử lại.',
+  'google-failed': 'Không đăng nhập Google được.',
 }
 // Closing the Google window is not an error worth showing
 export const isCancel = (e) => ['auth/popup-closed-by-user', 'auth/cancelled-popup-request', 'auth/user-cancelled'].includes(e?.code)
-  || /cancel/i.test(e?.message || '')
-export const authMessage = (e) => AUTH_ERR[e?.code] || (e?.code ? `Có lỗi xảy ra (${e.code}), thử lại nhé.` : 'Có lỗi xảy ra, thử lại nhé.')
+  || /cancel|12501/i.test(e?.message || '')
+export const authMessage = (e) => {
+  const base = AUTH_ERR[e?.code] || (e?.code ? `Có lỗi xảy ra (${e.code}), thử lại nhé.` : 'Có lỗi xảy ra, thử lại nhé.')
+  // Show the technical detail too, so a screenshot is enough to find the cause
+  const detail = e?.detail || (!AUTH_ERR[e?.code] && e?.message) || ''
+  return detail && !base.includes(detail) ? `${base} (${String(detail).slice(0, 160)})` : base
+}
 
 // Loading Firebase can fail (offline, or the site was just updated): report it clearly
 async function loadOrFail() {
@@ -220,6 +229,46 @@ export async function signIn(email, password, create = false) {
   return cred.user
 }
 
+// The Android app installed before Google sign-in existed has no native Google part
+export const appNeedsUpdate = () => isNative && !Capacitor.isPluginAvailable('FirebaseAuthentication')
+export const APK_URL = 'https://github.com/hoh72905-cmd/capy-toeic/releases/latest'
+
+// Google does not allow its sign-in page inside an app's web view, so Android's own account picker is used.
+// First the new picker (Credential Manager); if it fails, the classic Google account chooser.
+async function nativeGoogleToken() {
+  if (appNeedsUpdate()) throw Object.assign(new Error('app outdated'), { code: 'app-outdated' })
+  const { FirebaseAuthentication } = await import('@capacitor-firebase/authentication')
+  const tryOnce = async (useCredentialManager) => {
+    const r = await FirebaseAuthentication.signInWithGoogle({ skipNativeAuth: true, useCredentialManager })
+    const t = r?.credential?.idToken
+    if (!t) throw Object.assign(new Error('no token'), { code: 'auth/no-token' })
+    return t
+  }
+  const t0 = Date.now()
+  try {
+    return await tryOnce(true)
+  } catch (e) {
+    // A real "closed by the user" takes a moment; a quick failure means the picker could not be shown
+    if (isCancel(e) && Date.now() - t0 > 4000) throw e
+    console.warn('Credential Manager failed, using the classic chooser:', e?.message)
+    try {
+      return await tryOnce(false)
+    } catch (e2) {
+      if (isCancel(e2) || /12501/.test(e2?.message || '')) throw e2
+      throw Object.assign(new Error(e2?.message || e?.message || 'google failed'), { code: googleCode(e2), detail: e2?.message || e?.message })
+    }
+  }
+}
+
+// Classic Google Sign-In error numbers → readable codes
+function googleCode(e) {
+  const m = e?.message || ''
+  if (/\b10\b|DEVELOPER_ERROR|28433|not set up correctly/i.test(m)) return 'google-config'
+  if (/\b7\b|NETWORK|network/i.test(m)) return 'auth/network-request-failed'
+  if (/No credential|no account|28436/i.test(m)) return 'google-no-account'
+  return e?.code || 'google-failed'
+}
+
 // One tap: sign in with a Google account already on the phone / in the browser
 export async function signInWithGoogle() {
   const { auth, A } = await loadOrFail()
@@ -228,11 +277,7 @@ export async function signInWithGoogle() {
   await listenAuth()
   try {
     if (isNative) {
-      // Google does not allow its sign-in page inside an app's web view: use Android's account picker
-      const { FirebaseAuthentication } = await import('@capacitor-firebase/authentication')
-      const r = await FirebaseAuthentication.signInWithGoogle({ skipNativeAuth: true })
-      const idToken = r?.credential?.idToken
-      if (!idToken) throw Object.assign(new Error('no token'), { code: 'auth/no-token' })
+      const idToken = await nativeGoogleToken()
       return (await A.signInWithCredential(auth, A.GoogleAuthProvider.credential(idToken))).user
     }
     const provider = new A.GoogleAuthProvider()
