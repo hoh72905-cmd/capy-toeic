@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react'
 import { FAMILIES, TOPICS } from '../data/vocab.js'
 import { setState, useStore, logActivity } from '../lib/store.js'
 import { uid, todayKey } from '../lib/date.js'
-import { speak } from '../lib/speech.js'
 import Speak from '../components/Speak.jsx'
 
 export default function Vocab({ params, onDone }) {
@@ -75,8 +74,8 @@ function FamilyCard({ f, open, onToggle }) {
             </tbody>
           </table>
           <div className="syn-ant">
-            <div><b>≈ Đồng nghĩa:</b> {f.syn.map((s) => <button key={s} className="chip" onClick={() => speak(s)}>{s}</button>)}</div>
-            <div><b>≠ Trái nghĩa:</b> {f.ant.length ? f.ant.map((s) => <button key={s} className="chip pink" onClick={() => speak(s)}>{s}</button>) : '—'}</div>
+            <div><b>≈ Đồng nghĩa:</b> {f.syn.map((s) => <span key={s} className="chip word-chip">{s} <Speak text={s} small /></span>)}</div>
+            <div><b>≠ Trái nghĩa:</b> {f.ant.length ? f.ant.map((s) => <span key={s} className="chip pink word-chip">{s} <Speak text={s} small /></span>) : '—'}</div>
           </div>
           <div className="examples">
             {f.ex.map(([en, vi]) => (

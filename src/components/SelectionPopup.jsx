@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { localLookup, translate, looksVietnamese } from '../lib/translate.js'
-import { speak } from '../lib/speech.js'
+import { speak, stopSpeak, useSpeaking, soundHint } from '../lib/speech.js'
 import { setState } from '../lib/store.js'
 import { uid, todayKey } from '../lib/date.js'
 
@@ -9,6 +9,8 @@ export default function SelectionPopup() {
   const [sel, setSel] = useState(null) // { text, x, y }
   const [result, setResult] = useState({ local: null, vi: '', loading: false, error: '' })
   const [saved, setSaved] = useState(false)
+  const [hint, setHint] = useState('')
+  const now = useSpeaking()
   const boxRef = useRef(null)
 
   useEffect(() => {
@@ -35,6 +37,7 @@ export default function SelectionPopup() {
   useEffect(() => {
     if (!sel) return
     setSaved(false)
+    setHint('')
     const local = localLookup(sel.text)
     setResult({ local, vi: '', loading: true, error: '' })
     let alive = true
@@ -61,10 +64,13 @@ export default function SelectionPopup() {
       {result.local && <div className="sel-local">📗 {result.local.vi} <span className="pill">{result.local.pos}</span></div>}
       <div className="sel-vi">{result.loading ? 'Đang dịch…' : result.error || (result.vi && `🌐 ${result.vi}`)}</div>
       <div className="row gap-s">
-        <button className="btn sm blue" onClick={() => speak(sel.text)}>🔊 Phát âm</button>
-        <button className="btn sm" onClick={() => speak(sel.text, { rate: 0.7 })}>🐢 Chậm</button>
+        {now === sel.text
+          ? <button className="btn sm pinkbtn" onClick={stopSpeak}>⏹ Dừng</button>
+          : <button className="btn sm blue" onClick={() => speak(sel.text).then((r) => setHint(r.ok || r.reason === 'stopped' ? '' : soundHint(r.reason)))}>🔊 Phát âm</button>}
+        <button className="btn sm" onClick={() => speak(sel.text, { rate: 0.7 }).then((r) => setHint(r.ok || r.reason === 'stopped' ? '' : soundHint(r.reason)))}>🐢 Chậm</button>
         <button className="btn sm yellow" onClick={save} disabled={saved}>{saved ? '✓ Đã lưu' : '⭐ Lưu'}</button>
       </div>
+      {hint && <p className="sound-hint" style={{ padding: 0 }}>{hint}</p>}
     </div>
   )
 }

@@ -6,3 +6,4 @@ android/.gradle
 android/build
 *.apk
 6599da88afbcdd274c76325bd8249887.jpg
+android/keystore/

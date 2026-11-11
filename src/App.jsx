@@ -27,6 +27,9 @@ const TOEIC_NAV = [
 ]
 const TOEIC_PAGES = new Set([...TOEIC_NAV.map((n) => n.id), 'session'])
 const FLOATERS = ['✨', '🍊', '☁️', '⭐', '🫧', '🌼']
+// Each Vercel deployment also has its own URL; data saved there does not carry over
+const HOME_HOST = 'capy-toeic.vercel.app'
+const PREVIEW_HOST = typeof location !== 'undefined' && location.hostname.endsWith('.vercel.app') && location.hostname !== HOME_HOST
 
 function readHash() {
   const [page, ref] = window.location.hash.replace('#/', '').split('/')
@@ -120,6 +123,12 @@ export default function App() {
             </nav>
           )}
         </div>
+        {PREVIEW_HOST && (
+          <div className="host-warn">
+            ⚠️ Đây là link xem thử của Vercel — dữ liệu học ở link này <b>tách riêng</b> và có thể mất.
+            Hãy luôn mở <a href={`https://${HOME_HOST}/`}>{HOME_HOST}</a> để giữ tiến độ.
+          </div>
+        )}
         <main>{content}</main>
       </div>
       <SelectionPopup />

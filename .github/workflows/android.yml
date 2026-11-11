@@ -33,12 +33,22 @@ jobs:
 
       - name: Build APK
         working-directory: android
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          CAPY_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          # The same signing key every time, so updates install over the old app and keep its data
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/capy.jks"
+            export CAPY_KEYSTORE="$RUNNER_TEMP/capy.jks"
+          else
+            echo "::warning::ANDROID_KEYSTORE_B64 secret is missing: APK is signed with a temporary debug key and cannot update an existing install."
+          fi
+          ./gradlew assembleRelease --no-daemon -PversionCode=$((100 + ${{ github.run_number }}))
 
       - name: Rename APK
-        run: cp android/app/build/outputs/apk/debug/app-debug.apk capy-toeic.apk
+        run: cp android/app/build/outputs/apk/release/app-release.apk capy-toeic.apk
 
       - uses: actions/upload-artifact@v4
         with:

@@ -60,8 +60,9 @@ Có Android Studio thì có thể build ngay trên máy: `npm run android:sync` 
 ## Nguồn dữ liệu
 - Khung kiến thức, mốc điểm TOEIC → CEFR và thứ tự bài học: [English Test Prep Data: TOEIC, IELTS, TOEFL](https://www.kaggle.com/datasets/duongduong123/english-test-prep-data-toeic-ielts-toefl) của duongduong123, giấy phép **Open Database License (ODbL)**. File `src/data/curriculum.js` được tạo bằng `python3 scripts/build_curriculum.py <thư mục CSV đã giải nén>`.
 - Từ vựng, câu ví dụ, bài nghe chép và câu hỏi ngữ pháp: tự soạn cho app.
+- Âm thanh bài nghe và từ vựng (545 file MP3 trong `public/audio`) được tạo sẵn bằng [Piper TTS](https://github.com/rhasspy/piper) với các giọng: LJ Speech (public domain), LibriTTS-R (CC BY 4.0), Hi-Fi TTS "Cori" của NVIDIA (CC BY 4.0), VCTK của Đại học Edinburgh (CC BY 4.0). Tạo lại bằng `scripts/list_audio.mjs` + `scripts/build_audio.py` (xem đầu file).
 
 ## Ghi chú
 - Dịch tự động dùng MyMemory (miễn phí, khoảng 5.000 ký tự/ngày). 165+ từ trong bộ từ vựng được tra ngay cả khi không có mạng.
-- Giọng đọc dùng engine có sẵn trên máy (Chrome/Edge/Android). Trên Android nên cài "Speech Services by Google".
-- Dữ liệu nằm trong trình duyệt/app của từng máy. Muốn chuyển máy: Sổ tay → Cài đặt → Tải bản sao lưu → khôi phục ở máy kia.
+- Bài nghe và từ vựng có file âm thanh sẵn nên máy nào cũng có tiếng, kể cả offline. Chỉ phần bôi đen để nghe và bài tự tạo mới dùng giọng đọc của máy (Android nên cài "Speech Services by Google").
+- Dữ liệu nằm trong trình duyệt/app của từng máy (tự lưu + bản dự phòng mỗi ngày), tải lại hay cập nhật web không mất. Luôn mở đúng link https://capy-toeic.vercel.app — link xem thử của từng lần deploy có dữ liệu riêng. Muốn chuyển máy: Cài đặt → Tải bản sao lưu → khôi phục ở máy kia.

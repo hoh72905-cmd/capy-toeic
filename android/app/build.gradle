@@ -7,8 +7,9 @@ android {
         applicationId "com.capytoeic.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        // Each GitHub build gets a higher number so Android accepts it as an update
+        versionCode((project.findProperty('versionCode') ?: '1') as Integer)
+        versionName "1.0." + (project.findProperty('versionCode') ?: '1')
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,8 +17,22 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // A fixed signing key (from GitHub secrets) so a new APK installs over the old one
+    // and keeps the learner's data. Without it, a debug key is used.
+    def ksFile = System.getenv('CAPY_KEYSTORE')
+    signingConfigs {
+        if (ksFile) {
+            release {
+                storeFile file(ksFile)
+                storePassword System.getenv('CAPY_KEYSTORE_PASSWORD')
+                keyAlias 'capy'
+                keyPassword System.getenv('CAPY_KEYSTORE_PASSWORD')
+            }
+        }
+    }
     buildTypes {
         release {
+            signingConfig ksFile ? signingConfigs.release : signingConfigs.debug
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }

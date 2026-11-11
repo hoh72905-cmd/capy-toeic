@@ -1,5 +1,6 @@
-// Offline cache: app files are cached; translation API always goes to the network.
-const CACHE = 'capy-toeic-v1';
+// Offline cache. App files and lesson audio are cached; translation API always goes to the network.
+// Study data is NOT here: it lives in localStorage and is never touched by updates.
+const CACHE = 'capy-toeic-v3';
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['./', './index.html', './manifest.webmanifest'])));
   self.skipWaiting();
@@ -9,18 +10,20 @@ self.addEventListener('activate', (e) => {
   self.clients.claim();
 });
 self.addEventListener('fetch', (e) => {
-  const url = new URL(e.request.url);
-  if (e.request.method !== 'GET') return;
+  const req = e.request;
+  const url = new URL(req.url);
+  if (req.method !== 'GET') return;
   if (url.origin !== location.origin && !url.host.includes('fonts.')) return;
-  // Network first for pages, cache first for assets
-  if (e.request.mode === 'navigate') {
-    e.respondWith(fetch(e.request).then((r) => {
-      const copy = r.clone(); caches.open(CACHE).then((c) => c.put(e.request, copy)); return r;
+  // Audio is often fetched in ranges (Safari): let the browser handle those directly
+  if (req.headers.has('range')) return;
+  if (req.mode === 'navigate') {
+    e.respondWith(fetch(req).then((r) => {
+      const copy = r.clone(); caches.open(CACHE).then((c) => c.put('./index.html', copy)); return r;
     }).catch(() => caches.match('./index.html')));
     return;
   }
-  e.respondWith(caches.match(e.request).then((hit) => hit || fetch(e.request).then((r) => {
-    if (r.ok) { const copy = r.clone(); caches.open(CACHE).then((c) => c.put(e.request, copy)); }
+  e.respondWith(caches.match(req).then((hit) => hit || fetch(req).then((r) => {
+    if (r.ok && r.status === 200) { const copy = r.clone(); caches.open(CACHE).then((c) => c.put(req, copy)); }
     return r;
   })));
 });

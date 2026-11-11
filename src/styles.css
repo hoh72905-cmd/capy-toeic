@@ -663,3 +663,11 @@ button.countdown:hover { transform: rotate(-4deg) scale(1.06); }
 .rem-actions { display: flex; gap: 4px; flex: none; }
 .hero-bubble { max-width: min(46%, 420px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 520px) { .hero-bubble { max-width: 88%; } }
+
+/* Sound */
+.btn.pinkbtn { background: var(--pink); color: #6b1d31; box-shadow: 0 4px 0 #f08aa2, inset 0 2px 0 rgba(255, 255, 255, .6); animation: pulse 1.2s ease-in-out infinite; }
+.icon-btn.playing { background: var(--pink); animation: pulse 1s ease-in-out infinite; }
+.sound-hint { margin: 0; padding: 8px 12px 12px; font-size: .88rem; font-weight: 700; color: var(--pink-deep); }
+.host-warn { margin: 10px 16px 0; padding: 10px 14px; border-radius: 14px; background: #fff1c2; border: 2px solid var(--yellow-deep); font-size: .9rem; }
+@media (min-width: 900px) { .host-warn { margin: 20px 32px 0; } }
+.word-chip { display: inline-flex; align-items: center; gap: 4px; padding-right: 4px; }

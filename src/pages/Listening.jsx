@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { LESSONS, blanksFor, norm } from '../data/listening.js'
-import { useStore, setState, logActivity } from '../lib/store.js'
-import { speak, stopSpeak, ttsAvailable } from '../lib/speech.js'
+import { useStore, setState, getState, logActivity } from '../lib/store.js'
+import { speak, stopSpeak, useSpeaking, soundHint } from '../lib/speech.js'
 import { uid, todayKey } from '../lib/date.js'
 import Mascot from '../components/Mascot.jsx'
 
@@ -24,7 +24,7 @@ function diffWords(expected, typed) {
 }
 
 export default function Listening({ params, onDone }) {
-  const { customLessons, listenDone } = useStore()
+  const { customLessons, listenDone, listenProgress } = useStore()
   const all = useMemo(() => [...LESSONS, ...customLessons], [customLessons])
   const [current, setCurrent] = useState(() => all.find((l) => l.id === params?.ref) || null)
   const [adding, setAdding] = useState(false)
@@ -36,7 +36,6 @@ export default function Listening({ params, onDone }) {
       <div className="page-head">
         <h1>🎧 Nghe & chép</h1>
         <p className="muted">Mỗi bài ~10 câu, khoảng 5–6 phút — vừa đủ tập trung rồi đổi chủ đề. Có 2 dạng: <b>đục lỗ</b> (điền từ khóa) và <b>nguyên câu</b>.</p>
-        {!ttsAvailable() && <p className="notice">Trình duyệt này chưa hỗ trợ đọc giọng nói. Hãy dùng Chrome hoặc app Android.</p>}
       </div>
       <div className="lesson-grid">
         {all.map((l) => (
@@ -48,6 +47,7 @@ export default function Listening({ params, onDone }) {
               <div className="row gap-s">
                 <span className="pill">{'⭐'.repeat(l.level || 1)}</span>
                 {listenDone[l.id] && <span className={`pill ${listenDone[l.id].best >= 80 ? 'green' : 'pink'}`}>Tốt nhất {listenDone[l.id].best}%</span>}
+                {listenProgress?.[l.id] && <span className="pill blue">▶ Đang làm câu {listenProgress[l.id].idx + 1}/{l.s.length}</span>}
               </div>
             </div>
           </button>
@@ -90,18 +90,32 @@ function AddLesson({ onClose }) {
 }
 
 function Player({ lesson, onBack, onDone }) {
-  const [mode, setMode] = useState('cloze')
-  const [idx, setIdx] = useState(0)
+  // Resume where the learner stopped last time (saved after every sentence)
+  const saved = getState().listenProgress?.[lesson.id]
+  const [mode, setMode] = useState(saved?.mode || 'cloze')
+  const [idx, setIdx] = useState(saved ? Math.min(saved.idx, lesson.s.length - 1) : 0)
   const [typed, setTyped] = useState('')
   const [blankVals, setBlankVals] = useState({})
   const [checked, setChecked] = useState(null) // { score, parts }
-  const [scores, setScores] = useState([])
-  const [playing, setPlaying] = useState(false)
+  const [scores, setScores] = useState(saved?.scores || [])
   const [rate, setRate] = useState(1)
-  const [elapsed, setElapsed] = useState(0)
+  const [elapsed, setElapsed] = useState(saved?.elapsed || 0)
   const [finished, setFinished] = useState(false)
+  const [hint, setHint] = useState('')
   const inputRef = useRef(null)
   const { listenDone } = useStore()
+  const speakingNow = useSpeaking()
+  const audioKey = lesson.custom ? undefined : `L:${lesson.id}:${idx}`
+  const playing = speakingNow !== null && speakingNow === (audioKey || lesson.s[idx][0])
+
+  const saveProgress = (patch) => setState((s) => ({
+    listenProgress: { ...s.listenProgress, [lesson.id]: { idx, scores, mode, elapsed, ...patch } },
+  }))
+  const clearProgress = () => setState((s) => {
+    const next = { ...s.listenProgress }
+    delete next[lesson.id]
+    return { listenProgress: next }
+  })
 
   const [en, vi] = lesson.s[idx]
   const tokens = en.split(/\s+/)
@@ -115,19 +129,26 @@ function Player({ lesson, onBack, onDone }) {
 
   useEffect(() => () => stopSpeak(), [])
 
-  const play = async (r = rate) => {
-    setPlaying(true)
-    await speak(en, { accent: lesson.accent, rate: r })
-    setPlaying(false)
-    inputRef.current?.focus()
+  const play = async (r = rate, auto = false) => {
+    setHint('')
+    const res = await speak(en, { accent: lesson.accent, rate: r, key: audioKey })
+    if (!res.ok && res.reason !== 'stopped') setHint(auto && res.reason === 'blocked' ? '👆 Bấm ▶ Phát để nghe câu này.' : soundHint(res.reason))
+    if (res.ok) inputRef.current?.focus({ preventScroll: true })
   }
 
-  // Auto play each new sentence
+  // Auto play each new sentence (browsers may block this until the first tap)
   useEffect(() => {
-    const t = setTimeout(() => play(), 400)
+    if (finished) return
+    const t = setTimeout(() => play(rate, true), 400)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [idx])
+  }, [idx, finished])
+
+  // Remember the time spent every 15 seconds
+  useEffect(() => {
+    if (!finished && elapsed > 0 && elapsed % 15 === 0) saveProgress({})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [elapsed])
 
   const check = () => {
     let score, parts
@@ -147,13 +168,18 @@ function Player({ lesson, onBack, onDone }) {
     const newScores = [...scores, checked.score]
     setScores(newScores)
     setChecked(null); setTyped(''); setBlankVals({})
+    stopSpeak()
     if (idx + 1 >= lesson.s.length) {
+      clearProgress()
       setFinished(true)
       const avg = Math.round(newScores.reduce((a, b) => a + b, 0) / newScores.length)
       const prev = listenDone[lesson.id]?.best || 0
       setState((s) => ({ listenDone: { ...s.listenDone, [lesson.id]: { best: Math.max(prev, avg), last: avg, mode, date: todayKey() } } }))
       logActivity('listen', 1, Math.max(1, Math.round(elapsed / 60)))
-    } else setIdx(idx + 1)
+    } else {
+      saveProgress({ idx: idx + 1, scores: newScores })
+      setIdx(idx + 1)
+    }
   }
 
   const onKey = (e) => {
@@ -172,7 +198,7 @@ function Player({ lesson, onBack, onDone }) {
           <div className="row gap-s center-row">
             {onDone ? <button className="btn yellow" onClick={onDone}>Tiếp tục ➜</button> : <>
               <button className="btn" onClick={onBack}>← Danh sách bài</button>
-              <button className="btn blue" onClick={() => { setIdx(0); setScores([]); setElapsed(0); setFinished(false); setMode(mode === 'cloze' ? 'full' : 'cloze') }}>Làm lại dạng {mode === 'cloze' ? 'nguyên câu' : 'đục lỗ'}</button>
+              <button className="btn blue" onClick={() => { setIdx(0); setScores([]); setElapsed(0); setChecked(null); setFinished(false); setMode(mode === 'cloze' ? 'full' : 'cloze') }}>Làm lại dạng {mode === 'cloze' ? 'nguyên câu' : 'đục lỗ'}</button>
             </>}
           </div>
         </div>
@@ -196,19 +222,22 @@ function Player({ lesson, onBack, onDone }) {
           <div className="video-progress"><div style={{ width: `${(idx / lesson.s.length) * 100}%` }} /></div>
         </div>
         <div className="video-controls">
-          <button className="btn blue" onClick={() => play()} disabled={playing}>{playing ? '🔉 Đang đọc…' : '▶ Phát'}</button>
-          <button className="btn" onClick={() => play(0.7)} disabled={playing}>🐢 Chậm</button>
+          {playing
+            ? <button className="btn pinkbtn" onClick={stopSpeak}>⏹ Dừng</button>
+            : <button className="btn blue" onClick={() => play()}>▶ Phát</button>}
+          <button className="btn" onClick={() => play(0.75)}>🐢 Chậm</button>
           <select value={rate} onChange={(e) => setRate(Number(e.target.value))} aria-label="Tốc độ">
             <option value={0.85}>0.85x</option><option value={1}>1x</option><option value={1.15}>1.15x</option>
           </select>
           <span className="muted small">Câu {idx + 1}/{lesson.s.length} · {ACCENT_NAME[lesson.accent]}</span>
         </div>
+        {hint && <p className="sound-hint">{hint}</p>}
       </div>
 
       <div className="card">
         <div className="seg">
-          <button className={mode === 'cloze' ? 'on' : ''} onClick={() => { setMode('cloze'); setChecked(null) }}>🕳️ Đục lỗ</button>
-          <button className={mode === 'full' ? 'on' : ''} onClick={() => { setMode('full'); setChecked(null) }}>✍️ Nguyên câu</button>
+          <button className={mode === 'cloze' ? 'on' : ''} onClick={() => { setMode('cloze'); setChecked(null); saveProgress({ mode: 'cloze' }) }}>🕳️ Đục lỗ</button>
+          <button className={mode === 'full' ? 'on' : ''} onClick={() => { setMode('full'); setChecked(null); saveProgress({ mode: 'full' }) }}>✍️ Nguyên câu</button>
         </div>
 
         {mode === 'cloze' ? (

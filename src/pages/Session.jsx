@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useStore } from '../lib/store.js'
+import { useStore, getState, setState } from '../lib/store.js'
 import { todayKey } from '../lib/date.js'
 import { dayPicks, grammarName } from '../data/plan.js'
 import Flashcards from './Flashcards.jsx'
@@ -18,8 +18,15 @@ export default function Session({ go }) {
     { key: 'listen', label: `🎧 ${picks.lesson.title}`, sub: '~6 phút' },
     { key: 'vocab', label: `📚 ${picks.family.words[0][0]}`, sub: 'word family' },
   ]
-  const [i, setI] = useState(0)
-  const next = () => setI((x) => x + 1)
+  // Resume today's session at the step where it was left
+  const today = todayKey()
+  const saved = getState().sessionProgress
+  const [i, setI] = useState(saved?.date === today ? saved.step : 0)
+  const next = () => setI((x) => {
+    const step = x + 1
+    setState({ sessionProgress: { date: today, step } })
+    return step
+  })
   const done = i >= steps.length
 
   return (

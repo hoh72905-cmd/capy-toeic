@@ -1,11 +1,11 @@
 import { useRef, useState } from 'react'
-import { useStore, setState, exportData, importData, resetAll } from '../lib/store.js'
+import { useStore, setState, exportData, importData, resetAll, storage } from '../lib/store.js'
 import { todayKey } from '../lib/date.js'
 import Title from '../components/Title.jsx'
 import ExamSetup from '../components/ExamSetup.jsx'
 
 export default function Settings() {
-  const { profile } = useStore()
+  const { profile, savedAt } = useStore()
   const fileRef = useRef(null)
   const [msg, setMsg] = useState('')
   const set = (k, v) => setState((s) => ({ profile: { ...s.profile, [k]: v } }))
@@ -33,7 +33,11 @@ export default function Settings() {
       <ExamSetup />
       <div className="card form tint-blue">
         <Title icon="💾">Sao lưu dữ liệu</Title>
-        <p className="muted small">Dữ liệu lưu ngay trên máy này. Muốn chuyển sang điện thoại/máy khác: tải bản sao lưu rồi khôi phục ở máy kia.</p>
+        <p className={storage.ok ? 'ok-box small' : 'cause small'}>
+          {storage.ok ? '💾 Tự động lưu mỗi khi bạn học' : '⚠️ Không lưu được dữ liệu (bộ nhớ đầy hoặc đang ở chế độ ẩn danh)'}
+          {savedAt ? ` · lần lưu gần nhất ${new Date(savedAt).toLocaleString('vi-VN')}` : ''}
+        </p>
+        <p className="muted small">Tiến độ được lưu ngay trên thiết bị và trình duyệt bạn đang dùng (kèm một bản dự phòng mỗi ngày), nên tải lại trang hay cập nhật web đều không mất. Mỗi máy/trình duyệt giữ dữ liệu riêng: muốn chuyển sang máy khác, tải bản sao lưu rồi khôi phục ở máy kia. Đừng xóa dữ liệu duyệt web của trang này.</p>
         <div className="row gap-s wrap">
           <button className="btn blue" onClick={download}>⬇️ Tải bản sao lưu</button>
           <button className="btn" onClick={() => fileRef.current?.click()}>⬆️ Khôi phục từ file</button>
