@@ -65,7 +65,7 @@ function flush() {
   for (const [path, value] of batch) args.push(new F.FieldPath(...path), value === DELETE ? F.deleteField() : value)
   args.push('updatedAt', F.serverTimestamp())
   set({ status: navigator.onLine === false ? 'offline' : 'saving' })
-  F.updateDoc(ref, ...args).catch((e) => set({ status: 'error', message: e.code || e.message }))
+  F.updateDoc(ref, ...args).catch((e) => set({ status: 'error', message: syncMessage(e) }))
 }
 
 function queue(changes) {
@@ -76,12 +76,13 @@ function queue(changes) {
   if (!timer) timer = setTimeout(flush, 500)
 }
 
-async function startSync(user) {
-  const { db, F } = fb
-  set({ status: 'connecting', email: user.email, message: '' })
-  ref = F.doc(db, 'users', user.uid)
+// First sync after signing in: read the cloud copy, merge with this device, write back.
+// Retried a few times so a bad moment (weak signal, app just opened) doesn't leave the account empty.
+async function firstSync(user, myRef, attempt = 0) {
+  const { F } = fb
   try {
-    const snap = await F.getDoc(ref)
+    const snap = await F.getDoc(myRef)
+    if (ref !== myRef) return // signed out meanwhile
     // Data left on this device by a different account must never be mixed into this one
     let last = null
     try { last = localStorage.getItem(UID_KEY) } catch { /* ignore */ }
@@ -90,16 +91,39 @@ async function startSync(user) {
     if (otherAccount) replaceFromCloud(local)
     try { localStorage.setItem(UID_KEY, user.uid) } catch { /* ignore */ }
     if (!snap.exists()) {
-      await F.setDoc(ref, { ...encode(local), email: user.email, createdAt: F.serverTimestamp(), updatedAt: F.serverTimestamp() })
+      await F.setDoc(myRef, { ...encode(local), email: user.email, createdAt: F.serverTimestamp(), updatedAt: F.serverTimestamp() })
     } else {
       // Keep what this device already had and what is in the cloud
       const merged = merge(local, decode(snap.data()))
       replaceFromCloud(merged)
-      await F.setDoc(ref, { ...encode(merged), email: user.email, updatedAt: F.serverTimestamp() })
+      await F.setDoc(myRef, { ...encode(merged), email: user.email, updatedAt: F.serverTimestamp() })
     }
+    return true
   } catch (e) {
-    set({ status: 'error', message: e.code || e.message })
+    if (ref !== myRef) return
+    const offline = navigator.onLine === false
+    set({ status: offline ? 'offline' : 'error', message: offline ? '' : syncMessage(e) })
+    if (attempt < 6) {
+      await new Promise((r) => setTimeout(r, [2, 5, 10, 20, 30, 60][attempt] * 1000))
+      if (ref === myRef) return firstSync(user, myRef, attempt + 1)
+    }
   }
+}
+
+const SYNC_ERR = {
+  'permission-denied': 'Máy chủ từ chối quyền truy cập dữ liệu — đăng xuất rồi đăng nhập lại nhé.',
+  'unavailable': 'Chưa kết nối được máy chủ, app sẽ tự thử lại.',
+  'failed-precondition': 'Trình duyệt đang mở app ở nhiều tab — đóng bớt tab rồi tải lại trang.',
+}
+const syncMessage = (e) => SYNC_ERR[e?.code] || `Đang thử lại… (${e?.code || e?.message || 'lỗi'})`
+
+async function startSync(user) {
+  const { db, F } = fb
+  set({ status: 'connecting', email: user.email, message: '' })
+  const myRef = F.doc(db, 'users', user.uid)
+  ref = myRef
+  const ok = await firstSync(user, myRef)
+  if (!ok || ref !== myRef) { if (ref === myRef) ref = null; return } // next sign-in / app start tries again
   // Live updates from the other devices
   unsubDoc = F.onSnapshot(ref, { includeMetadataChanges: true }, (snap) => {
     if (!snap.exists()) return
@@ -115,7 +139,7 @@ async function startSync(user) {
       }
       set({ status: 'synced', lastSync: Date.now(), message: '' })
     } else if (navigator.onLine === false) set({ status: 'offline' })
-  }, (e) => set({ status: 'error', message: e.code || e.message }))
+  }, (e) => set({ status: 'error', message: syncMessage(e) }))
   unsubLocal = onLocalChange((prev, next) => {
     const changes = diff(prev, next)
     if (changes.length) queue(changes)
@@ -169,17 +193,27 @@ const AUTH_ERR = {
   'auth/unauthorized-domain': 'Trang này chưa được phép đăng nhập Google. Hãy mở capy-toeic.vercel.app.',
   'auth/account-exists-with-different-credential': 'Email này đã đăng ký bằng mật khẩu — đăng nhập bằng email + mật khẩu nhé.',
   'auth/no-token': 'Không lấy được tài khoản Google trên máy. Thử lại hoặc dùng email.',
+  'auth/user-disabled': 'Tài khoản này đã bị khóa.',
+  'auth/missing-email': 'Bạn chưa nhập email.',
+  'auth/internal-error': 'Máy chủ đăng nhập đang bận, thử lại sau ít phút.',
+  'auth/popup-blocked': 'Trình duyệt chặn cửa sổ Google — cho phép cửa sổ bật lên rồi thử lại.',
+  'load-failed': 'Không tải được phần đăng nhập. Kiểm tra mạng rồi tải lại trang.',
 }
 // Closing the Google window is not an error worth showing
 export const isCancel = (e) => ['auth/popup-closed-by-user', 'auth/cancelled-popup-request', 'auth/user-cancelled'].includes(e?.code)
   || /cancel/i.test(e?.message || '')
 export const authMessage = (e) => AUTH_ERR[e?.code] || (e?.code ? `Có lỗi xảy ra (${e.code}), thử lại nhé.` : 'Có lỗi xảy ra, thử lại nhé.')
 
+// Loading Firebase can fail (offline, or the site was just updated): report it clearly
+async function loadOrFail() {
+  try { return await load() } catch (e) { throw Object.assign(new Error(e?.message || 'load failed'), { code: 'load-failed' }) }
+}
+
 export async function signIn(email, password, create = false) {
-  const { auth, A } = await load()
+  const { auth, A } = await loadOrFail()
   const cred = create
-    ? await A.createUserWithEmailAndPassword(auth, email.trim(), password)
-    : await A.signInWithEmailAndPassword(auth, email.trim(), password)
+    ? await A.createUserWithEmailAndPassword(auth, email.trim().toLowerCase(), password)
+    : await A.signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password)
   try { localStorage.setItem(FLAG, '1') } catch { /* ignore */ }
   started = true
   await listenAuth()
@@ -188,7 +222,7 @@ export async function signIn(email, password, create = false) {
 
 // One tap: sign in with a Google account already on the phone / in the browser
 export async function signInWithGoogle() {
-  const { auth, A } = await load()
+  const { auth, A } = await loadOrFail()
   try { localStorage.setItem(FLAG, '1') } catch { /* ignore */ }
   started = true
   await listenAuth()
@@ -236,7 +270,7 @@ export async function signOutCloud() {
 
 export async function resetPassword(email) {
   const { auth, A } = await load()
-  await A.sendPasswordResetEmail(auth, email.trim())
+  await A.sendPasswordResetEmail(auth, email.trim().toLowerCase())
 }
 
 // Push queued changes right away (e.g. when the app goes to the background)

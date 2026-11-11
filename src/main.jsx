@@ -20,3 +20,15 @@ const fromWeb = location.protocol === 'https:' && location.hostname !== 'localho
 if ('serviceWorker' in navigator && import.meta.env.PROD && fromWeb) {
   window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}))
 }
+
+// A page left open across a website update may ask for files that no longer exist
+// (e.g. the sign-in code): reload once to get the new version instead of failing
+window.addEventListener('vite:preloadError', (e) => {
+  try {
+    if (sessionStorage.getItem('capy-reloaded') === '1') return
+    sessionStorage.setItem('capy-reloaded', '1')
+  } catch { return }
+  e.preventDefault()
+  location.reload()
+})
+setTimeout(() => { try { sessionStorage.removeItem('capy-reloaded') } catch { /* ignore */ } }, 30000)

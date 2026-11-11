@@ -68,6 +68,7 @@ export default function Account() {
   const [pw, setPw] = useState('')
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
+  const [showPw, setShowPw] = useState(false)
   const s = STATUS[c.status] || STATUS.off
   const signedIn = !!c.email
 
@@ -109,12 +110,17 @@ export default function Account() {
           <GoogleButton onError={setMsg} />
           <div className="or"><span>hoặc dùng email</span></div>
           <div className="seg">
-            <button className={mode === 'login' ? 'on' : ''} onClick={() => setMode('login')}>Đăng nhập</button>
-            <button className={mode === 'create' ? 'on' : ''} onClick={() => setMode('create')}>Tạo tài khoản</button>
+            <button className={mode === 'login' ? 'on' : ''} onClick={() => { setMode('login'); setMsg('') }}>Đăng nhập</button>
+            <button className={mode === 'create' ? 'on' : ''} onClick={() => { setMode('create'); setMsg('') }}>Tạo tài khoản</button>
           </div>
           <form className="form" onSubmit={submit}>
-            <label>Email<input type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></label>
-            <label>Mật khẩu{mode === 'create' && ' (ít nhất 6 ký tự)'}<input type="password" autoComplete={mode === 'create' ? 'new-password' : 'current-password'} value={pw} onChange={(e) => setPw(e.target.value)} required minLength={6} /></label>
+            <label>Email<input type="email" inputMode="email" autoComplete="email" autoCapitalize="none" autoCorrect="off" spellCheck={false} value={email} onChange={(e) => setEmail(e.target.value)} required /></label>
+            <label>Mật khẩu{mode === 'create' && ' (ít nhất 6 ký tự)'}
+              <span className="pw-field">
+                <input type={showPw ? 'text' : 'password'} autoComplete={mode === 'create' ? 'new-password' : 'current-password'} autoCapitalize="none" autoCorrect="off" spellCheck={false} value={pw} onChange={(e) => setPw(e.target.value)} required minLength={6} />
+                <button type="button" className="pw-eye" onClick={() => setShowPw((v) => !v)} title={showPw ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}>{showPw ? '🙈' : '👁️'}</button>
+              </span>
+            </label>
             <div className="row between wrap">
               <button type="submit" className="btn yellow" disabled={busy}>{busy ? 'Đang xử lý…' : mode === 'create' ? 'Tạo tài khoản & đồng bộ' : 'Đăng nhập & đồng bộ'}</button>
               {mode === 'login' && <button type="button" className="link small" onClick={forgot}>Quên mật khẩu?</button>}

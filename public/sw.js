@@ -1,6 +1,6 @@
 // Offline cache. App files and lesson audio are cached; translation API always goes to the network.
 // Study data is NOT here: it lives in localStorage and is never touched by updates.
-const CACHE = 'capy-toeic-v3';
+const CACHE = 'capy-toeic-v4';
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['./', './index.html', './manifest.webmanifest'])));
   self.skipWaiting();

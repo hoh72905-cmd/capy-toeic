@@ -709,3 +709,6 @@ button.countdown:hover { transform: rotate(-4deg) scale(1.06); }
 .goal-sub { margin: 10px 0 6px; font-weight: 800; font-size: .85rem; color: var(--muted); }
 .quick-scores { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
 .quick-scores .chip { padding: 3px 10px; font-size: .8rem; }
+.pw-field { position: relative; display: block; }
+.pw-field input { width: 100%; padding-right: 46px; }
+.pw-eye { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); border: 0; background: none; font-size: 1.1rem; cursor: pointer; padding: 6px; }
