@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import { getState, onLocalChange, replaceFromCloud } from './store.js'
+import { getState, onLocalChange, replaceFromCloud, clearLocalData, freshState } from './store.js'
 import { diff, encode, decode, merge, DELETE } from './syncCodec.js'
 
 // Firebase project "toeic-28241". This web config is public by design;
@@ -14,6 +14,7 @@ const CONFIG = {
 }
 
 const FLAG = 'capy-cloud-on' // remembered so we only load Firebase for signed-in learners
+const UID_KEY = 'capy-cloud-uid' // which account the data on this device belongs to
 
 // ---- status for the UI ----
 // status: off | connecting | synced | saving | offline | error
@@ -76,7 +77,13 @@ async function startSync(user) {
   ref = F.doc(db, 'users', user.uid)
   try {
     const snap = await F.getDoc(ref)
-    const local = getState()
+    // Data left on this device by a different account must never be mixed into this one
+    let last = null
+    try { last = localStorage.getItem(UID_KEY) } catch { /* ignore */ }
+    const otherAccount = last && last !== user.uid
+    const local = otherAccount ? freshState() : getState()
+    if (otherAccount) replaceFromCloud(local)
+    try { localStorage.setItem(UID_KEY, user.uid) } catch { /* ignore */ }
     if (!snap.exists()) {
       await F.setDoc(ref, { ...encode(local), email: user.email, createdAt: F.serverTimestamp(), updatedAt: F.serverTimestamp() })
     } else {
@@ -166,11 +173,15 @@ export async function signIn(email, password, create = false) {
 }
 
 export async function signOutCloud() {
-  const { auth, A } = await load()
-  stopSync()
+  const { auth, A, F, db } = await load()
+  stopSync() // also sends any change not saved yet
+  try { await F.waitForPendingWrites(db) } catch { /* offline: Firestore keeps them and retries */ }
   try { localStorage.removeItem(FLAG) } catch { /* ignore */ }
   await A.signOut(auth)
-  set({ status: 'off', email: null })
+  // The next person using this device starts clean; this account's data stays in the cloud
+  clearLocalData()
+  try { localStorage.removeItem(UID_KEY) } catch { /* ignore */ }
+  set({ status: 'off', email: null, lastSync: null })
 }
 
 export async function resetPassword(email) {

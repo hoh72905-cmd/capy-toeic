@@ -108,6 +108,15 @@ export function replaceFromCloud(data) {
 }
 export { upgrade }
 
+// After signing out: wipe this device's copy (the data stays in the cloud account)
+export function clearLocalData() {
+  state = initial()
+  try { localStorage.removeItem(BACKUP_KEY); localStorage.removeItem(BROKEN_KEY) } catch { /* ignore */ }
+  save()
+  listeners.forEach((l) => l())
+}
+export const freshState = initial
+
 export function useStore(selector = (s) => s) {
   return useSyncExternalStore(
     (cb) => { listeners.add(cb); return () => listeners.delete(cb) },

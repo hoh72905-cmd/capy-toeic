@@ -72,7 +72,9 @@ export default function Account() {
             </div>
           </div>
           <p className="small muted">Web và app dùng chung tài khoản này: học hay thêm việc ở bên nào, bên kia sẽ hiện lên sau vài giây. Mất mạng vẫn học bình thường, có mạng lại sẽ tự đồng bộ.</p>
-          <button className="btn" onClick={() => signOutCloud()}>Đăng xuất</button>
+          <button className="btn" onClick={() => {
+            if (confirm('Đăng xuất? Dữ liệu của tài khoản này vẫn an toàn trên mây; dữ liệu trên máy này sẽ được dọn để người khác dùng máy không thấy. Đăng nhập lại là dữ liệu tự về.')) signOutCloud()
+          }}>Đăng xuất</button>
         </>
       ) : (
         <>
