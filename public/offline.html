@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Capy TOEIC</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; font-family: system-ui, sans-serif;
+    background: linear-gradient(160deg, #fff4c7, #e3f4fd); color: #3a3530; text-align: center; padding: 24px; box-sizing: border-box; }
+  .box { background: #fff; border: 3px solid #f2dcb0; border-radius: 26px; padding: 26px 22px; max-width: 360px; box-shadow: 0 6px 0 #ecd3a3, 0 16px 32px rgba(176,124,70,.2); }
+  img { width: 120px; height: 120px; border-radius: 28px; }
+  h1 { font-size: 1.3rem; margin: 14px 0 6px; }
+  p { color: #8a8178; line-height: 1.5; margin: 0 0 18px; }
+  button { border: 0; border-radius: 999px; padding: 12px 24px; font: inherit; font-weight: 800; background: #ffd54f; box-shadow: 0 4px 0 #f5b800; }
+</style>
+</head>
+<body>
+  <div class="box">
+    <img src="icons/icon-192.png" alt="" />
+    <h1>Capybara đang chờ mạng~ ♨️</h1>
+    <p>Lần đầu mở app cần có mạng để tải bài học. Bật Wi-Fi hoặc 4G rồi thử lại nhé!</p>
+    <button onclick="location.href='https://capy-toeic.vercel.app/'">🔄 Thử lại</button>
+  </div>
+  <script>
+    // Try again automatically when the connection comes back
+    window.addEventListener('online', function () { location.href = 'https://capy-toeic.vercel.app/' })
+  </script>
+</body>
+</html>

@@ -1,6 +1,5 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { Capacitor } from '@capacitor/core'
 import App from './App.jsx'
 import { unlockAudio } from './lib/speech.js'
 import { askPersistentStorage } from './lib/store.js'
@@ -15,7 +14,9 @@ window.addEventListener('pointerdown', unlock, true)
 // Keep study data from being cleared by the browser
 askPersistentStorage()
 
-// Offline support + "install app" on Android Chrome (not needed inside the native app)
-if ('serviceWorker' in navigator && import.meta.env.PROD && !Capacitor.isNativePlatform()) {
+// Offline support: also inside the Android app, which opens the live website
+// (so the app always has the newest version without reinstalling)
+const fromWeb = location.protocol === 'https:' && location.hostname !== 'localhost'
+if ('serviceWorker' in navigator && import.meta.env.PROD && fromWeb) {
   window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}))
 }

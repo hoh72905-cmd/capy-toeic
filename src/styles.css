@@ -692,3 +692,4 @@ button.countdown:hover { transform: rotate(-4deg) scale(1.06); }
 @keyframes toast-in { from { transform: translate(-50%, -30px); opacity: 0 } }
 .sync-invite { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 18px; background: linear-gradient(90deg, var(--blue-soft), #fff); border: 2.5px solid #9fd8f5; box-shadow: 0 4px 0 #7cc4ea; }
 .sync-invite .big-ico { font-size: 1.7rem; animation: floaty 3s ease-in-out infinite; }
+.version { text-align: center; }

@@ -2,5 +2,9 @@
   "appId": "com.capytoeic.app",
   "appName": "Capy TOEIC",
   "webDir": "dist",
+  "server": {
+    "url": "https://capy-toeic.vercel.app",
+    "errorPath": "offline.html"
+  },
   "android": { "backgroundColor": "#FFF8E1" }
 }

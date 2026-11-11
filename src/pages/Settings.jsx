@@ -48,6 +48,7 @@ export default function Settings() {
         </div>
         {msg && <p>{msg}</p>}
       </div>
+      <p className="muted small version">🦫 Phiên bản {new Date(__BUILD_TIME__).toLocaleString('vi-VN')} · app trên điện thoại tự cập nhật theo web, không cần cài lại</p>
     </div>
   )
 }
