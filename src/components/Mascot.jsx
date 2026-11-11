@@ -2,7 +2,7 @@
 export default function Mascot({ size = 90, mood = 'happy', className = '' }) {
   const eyes = mood === 'happy' || mood === 'cheer'
     ? <g stroke="#3b2a1d" strokeWidth="3" strokeLinecap="round" fill="none"><path d="M40 47 q5 -5 10 0" /><path d="M70 47 q5 -5 10 0" /></g>
-    : <g fill="#3b2a1d"><ellipse cx="45" cy="47" rx="3.6" ry="4.2" /><ellipse cx="75" cy="47" rx="3.6" ry="4.2" /><circle cx="46.2" cy="45.6" r="1.2" fill="#fff" /><circle cx="76.2" cy="45.6" r="1.2" fill="#fff" /></g>
+    : <g fill="#3b2a1d" className="eyes"><ellipse cx="45" cy="47" rx="3.6" ry="4.2" /><ellipse cx="75" cy="47" rx="3.6" ry="4.2" /><circle cx="46.2" cy="45.6" r="1.2" fill="#fff" /><circle cx="76.2" cy="45.6" r="1.2" fill="#fff" /></g>
   return (
     <svg className={`mascot ${className}`} width={size} height={size} viewBox="0 0 120 120" role="img" aria-label="Capybara">
       <ellipse cx="60" cy="112" rx="34" ry="5" fill="rgba(0,0,0,.08)" />

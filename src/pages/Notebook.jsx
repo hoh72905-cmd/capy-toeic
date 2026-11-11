@@ -1,10 +1,10 @@
-import { useRef, useState } from 'react'
-import { useStore, setState, exportData, importData, resetAll } from '../lib/store.js'
+import { useState } from 'react'
+import { useStore, setState } from '../lib/store.js'
 import { uid, todayKey } from '../lib/date.js'
 import Speak from '../components/Speak.jsx'
 
 export default function Notebook({ params }) {
-  const [tab, setTab] = useState(params?.tab || 'notes')
+  const [tab, setTab] = useState(params?.ref === 'words' ? 'words' : 'notes')
   return (
     <div className="page">
       <div className="page-head">
@@ -12,12 +12,10 @@ export default function Notebook({ params }) {
         <div className="seg">
           <button className={tab === 'notes' ? 'on' : ''} onClick={() => setTab('notes')}>📝 Ghi chú</button>
           <button className={tab === 'words' ? 'on' : ''} onClick={() => setTab('words')}>⭐ Từ đã lưu</button>
-          <button className={tab === 'settings' ? 'on' : ''} onClick={() => setTab('settings')}>⚙️ Cài đặt</button>
         </div>
       </div>
       {tab === 'notes' && <Notes />}
       {tab === 'words' && <Words />}
-      {tab === 'settings' && <Settings />}
     </div>
   )
 }
@@ -71,42 +69,6 @@ function Words() {
         ))}
         {!saved.length && <li className="muted">Chưa lưu từ nào.</li>}
       </ul>
-    </div>
-  )
-}
-
-function Settings() {
-  const { profile } = useStore()
-  const fileRef = useRef(null)
-  const [msg, setMsg] = useState('')
-  const set = (k, v) => setState((s) => ({ profile: { ...s.profile, [k]: v } }))
-  const download = () => {
-    const blob = new Blob([exportData()], { type: 'application/json' })
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = `capy-toeic-backup-${todayKey()}.json`
-    a.click()
-    URL.revokeObjectURL(a.href)
-  }
-  const upload = (e) => {
-    const f = e.target.files?.[0]
-    if (!f) return
-    f.text().then((t) => { importData(t); setMsg('✓ Đã khôi phục dữ liệu') }).catch(() => setMsg('File không hợp lệ'))
-  }
-  return (
-    <div className="card form">
-      <label>Tên hiển thị<input value={profile.name} onChange={(e) => set('name', e.target.value)} /></label>
-      <label>Ngày bắt đầu lộ trình<input type="date" value={profile.startDate} onChange={(e) => e.target.value && set('startDate', e.target.value)} /></label>
-      <label>Số từ mới mỗi ngày<input type="number" min={5} max={40} value={profile.dailyNew} onChange={(e) => set('dailyNew', Math.max(5, Math.min(40, Number(e.target.value) || 15)))} /></label>
-      <hr />
-      <p className="muted small">Dữ liệu lưu ngay trên máy này. Muốn chuyển sang điện thoại/máy khác: tải bản sao lưu rồi khôi phục ở máy kia.</p>
-      <div className="row gap-s wrap">
-        <button className="btn blue" onClick={download}>⬇️ Tải bản sao lưu</button>
-        <button className="btn" onClick={() => fileRef.current?.click()}>⬆️ Khôi phục từ file</button>
-        <input ref={fileRef} type="file" accept="application/json" hidden onChange={upload} />
-        <button className="btn danger" onClick={() => { if (confirm('Xóa toàn bộ tiến độ học? Không thể hoàn tác.')) resetAll() }}>Xóa dữ liệu</button>
-      </div>
-      {msg && <p>{msg}</p>}
     </div>
   )
 }

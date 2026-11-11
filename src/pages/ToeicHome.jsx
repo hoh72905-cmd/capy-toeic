@@ -1,92 +1,59 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import Mascot from '../components/Mascot.jsx'
+import Title from '../components/Title.jsx'
+import ExamSetup from '../components/ExamSetup.jsx'
 import { useStore, setState } from '../lib/store.js'
-import { todayKey, addDays, weekKeys, VI_DAYS, fromKey, uid } from '../lib/date.js'
-import { planInfo, tasksFor, dayPicks, grammarName, PHASES } from '../data/plan.js'
+import { todayKey, weekKeys, VI_DAYS, fromKey, uid } from '../lib/date.js'
+import { planInfo, dayPicks, grammarName, PHASES } from '../data/plan.js'
 import { CARDS } from '../data/vocab.js'
 import { GRAMMAR } from '../data/quiz.js'
 import { LESSONS } from '../data/listening.js'
 import { isDue, MASTERED_BOX } from '../lib/srs.js'
 import { todayCurriculum, examInfo } from '../lib/curriculum.js'
-import ExamSetup from '../components/ExamSetup.jsx'
+import { isToeic } from '../lib/today.js'
+import { useStreak, greeting } from '../lib/hooks.js'
+import { confetti, confettiAt } from '../lib/confetti.js'
 
 const KIND_PAGE = { flash: 'flash', listen: 'listen', quiz: 'practice', vocab: 'vocab', curri: 'plan' }
 
-function greeting() {
-  const h = new Date().getHours()
-  if (h < 11) return 'Chào buổi sáng'
-  if (h < 14) return 'Chào buổi trưa'
-  if (h < 18) return 'Chào buổi chiều'
-  return 'Chào buổi tối'
-}
-
-export function useStreak() {
-  const { activity, todos } = useStore()
-  const active = (k) => {
-    const a = activity[k]
-    const t = todos[k]
-    return (a && (a.flash || a.listen || a.quiz || a.vocab)) || (t && t.some((x) => x.done))
-  }
-  let k = todayKey()
-  if (!active(k)) k = addDays(k, -1)
-  let n = 0
-  while (active(k) && n < 400) { n++; k = addDays(k, -1) }
-  return n
-}
-
-export default function Dashboard({ go }) {
-  const s = useStore()
+// Overview of the TOEIC area: status, today's study tasks, week progress, review
+export default function ToeicHome({ go }) {
+  const { profile, todos, cards, topics, listenDone, curri } = useStore()
   const today = todayKey()
-  const { profile, todos, cards, topics, listenDone, curri } = s
   const info = planInfo(profile, today)
   const picks = dayPicks(profile, today)
   const exam = examInfo(profile, today)
   const curriToday = todayCurriculum(profile, curri, today)
-  const list = todos[today] || []
+  const list = (todos[today] || []).filter(isToeic)
   const [text, setText] = useState('')
   const streak = useStreak()
-
-  // First visit of the day: fill the to-do list from the 3-month plan
-  useEffect(() => {
-    if (!todos[today]) {
-      const auto = tasksFor(profile, today).map((t) => ({ ...t, id: uid(), done: false, auto: true }))
-      // Today's lessons from the Kaggle curriculum, spread evenly until the exam
-      const cur = todayCurriculum(profile, curri, today)
-      if (cur.list.length) auto.push({ id: uid(), done: false, auto: true, kind: 'curri', ref: 'curri', min: cur.list.length * 8, text: `📘 Khung kiến thức: ${cur.list.length} bài hôm nay` })
-      setState((st) => ({ todos: { ...st.todos, [today]: auto } }))
-    }
-  }, [today, todos, profile, curri])
-
-  const yesterday = addDays(today, -1)
-  const leftover = (todos[yesterday] || []).filter((t) => !t.done && !t.auto && !t.moved)
 
   const update = (fn) => setState((st) => ({ todos: { ...st.todos, [today]: fn(st.todos[today] || []) } }))
   const add = () => {
     if (!text.trim()) return
-    update((l) => [...l, { id: uid(), text: text.trim(), done: false, kind: 'custom' }])
+    update((l) => [...l, { id: uid(), text: text.trim(), done: false, kind: 'custom', toeic: true }])
     setText('')
   }
-  const moveLeftover = () => setState((st) => ({
-    todos: {
-      ...st.todos,
-      [today]: [...(st.todos[today] || []), ...leftover.map((t) => ({ ...t, id: uid() }))],
-      [yesterday]: st.todos[yesterday].map((t) => (leftover.find((x) => x.id === t.id) ? { ...t, moved: true } : t)),
-    },
-  }))
+  const toggle = (t, e) => {
+    const check = e.target.closest('li')?.querySelector('.check')
+    update((l) => l.map((x) => (x.id === t.id ? { ...x, done: !x.done } : x)))
+    if (!t.done) {
+      if (list.every((x) => x.done || x.id === t.id)) confetti(undefined, undefined, 70)
+      else confettiAt(check, 14)
+    }
+  }
 
   const done = list.filter((t) => t.done).length
   const pct = list.length ? Math.round((done / list.length) * 100) : 0
   const totalMin = list.reduce((a, t) => a + (t.min || 0), 0)
 
-  // Review items
   const dueCards = CARDS.filter((c) => cards[c.id] && isDue(cards[c.id])).length
   const learned = Object.values(cards).filter((c) => c.box >= MASTERED_BOX).length
   const weakTopics = GRAMMAR.filter((g) => topics[g.id] && (topics[g.id].due <= today || topics[g.id].box <= 1))
   const weakLessons = LESSONS.filter((l) => listenDone[l.id] && listenDone[l.id].best < 70)
 
-  const week = weekKeys(today)
-  const weekData = week.map((k) => {
-    const l = todos[k] || []
+  const weekData = weekKeys(today).map((k) => {
+    const l = (todos[k] || []).filter(isToeic)
     return { k, total: l.length, done: l.filter((t) => t.done).length }
   })
   const weekDone = weekData.reduce((a, d) => a + d.done, 0)
@@ -95,22 +62,26 @@ export default function Dashboard({ go }) {
 
   return (
     <div className="page dashboard">
-      <section className="card hero">
-        <div className="hero-photo" role="img" aria-label="Ba bé capybara ngâm suối nước nóng">
-          <span className="hero-bubble">{pct === 100 ? 'Xong hết rồi, giỏi quá! 🎉' : 'Học xíu rồi ngâm suối nha~ ♨️'}</span>
-        </div>
-        <div className="hero-text">
-          <p className="eyebrow">{greeting()} ☀️</p>
-          <h1>{profile.name} ơi, hôm nay mình cùng học nhé!</h1>
+      <section className="card toeic-banner">
+        <div className="grow">
+          <p className="eyebrow">🎓 Góc học TOEIC</p>
+          <h1>{greeting()}, {profile.name}! Học xíu nha~</h1>
           <div className="stat-row">
+            {exam.exam && <span className="stat exam-chip only-mobile" onClick={() => go('plan', { ref: 'exam' })}><b>⏳ {Math.max(0, exam.daysLeft)}</b> ngày nữa thi</span>}
             <span className="stat"><b>🔥 {streak}</b> ngày liên tiếp</span>
             <span className="stat"><b>📅 Tuần {info.week.n}</b>/12 · ngày {Math.min(info.total, info.dayIndex + 1)}/{info.total}</span>
-            {exam.exam && <span className="stat exam-chip" onClick={() => go('plan', { ref: 'exam' })}><b>⏳ {Math.max(0, exam.daysLeft)}</b> ngày nữa thi</span>}
             <span className="stat"><b>🎯 {info.target}</b> mục tiêu tuần · đích {exam.target} ({exam.cefr?.cefr})</span>
             <span className="stat"><b>⭐ {learned}</b> từ thành thạo</span>
           </div>
           <p className="phase-tag" style={{ background: PHASES[info.week.phase].color }}>{PHASES[info.week.phase].name} — {info.week.title}</p>
-          <Mascot size={64} mood={mood} className="bob hero-mascot" />
+        </div>
+        <div className="banner-side">
+          {exam.exam && (
+            <button className="countdown only-desktop" onClick={() => go('plan', { ref: 'exam' })} title="Đổi ngày thi">
+              <b>{Math.max(0, exam.daysLeft)}</b><span>ngày nữa thi</span>
+            </button>
+          )}
+          <Mascot size={96} mood={mood} className="bob" />
         </div>
       </section>
 
@@ -122,23 +93,17 @@ export default function Dashboard({ go }) {
       </button>
 
       <div className="grid-2">
-        <section className="card todo-card">
+        <section className="card tint-yellow todo-card">
           <div className="row between">
-            <h2>✅ To-do hôm nay</h2>
+            <Title icon="📝">Việc học hôm nay</Title>
             <span className="pill blue">{done}/{list.length} · {totalMin}p</span>
           </div>
           <div className="progress big"><div style={{ width: `${pct}%` }} /></div>
-          {leftover.length > 0 && (
-            <div className="notice">
-              Hôm qua còn {leftover.length} việc chưa xong.
-              <button className="btn sm" onClick={moveLeftover}>Chuyển sang hôm nay</button>
-            </div>
-          )}
           <ul className="todo-list">
             {list.map((t) => (
               <li key={t.id} className={t.done ? 'done' : ''}>
                 <label>
-                  <input type="checkbox" checked={t.done} onChange={() => update((l) => l.map((x) => (x.id === t.id ? { ...x, done: !x.done } : x)))} />
+                  <input type="checkbox" checked={t.done} onChange={(e) => toggle(t, e)} />
                   <span className="check" />
                   <span className="todo-text">{t.text}{t.min ? <em> · {t.min}p</em> : null}</span>
                 </label>
@@ -148,18 +113,19 @@ export default function Dashboard({ go }) {
                 </div>
               </li>
             ))}
-            {!list.length && <li className="muted">Chưa có việc nào — thêm ở dưới nhé.</li>}
+            {!list.length && <li className="muted">Chưa có việc học nào — thêm ở dưới nhé.</li>}
           </ul>
           <div className="row gap-s">
-            <input value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} placeholder="Thêm việc cần làm…" />
+            <input value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} placeholder="Thêm việc học TOEIC…" />
             <button className="btn yellow" onClick={add}>Thêm</button>
           </div>
-          {pct === 100 && <p className="celebrate">🎉 Xong hết rồi! Capybara tự hào về bạn lắm!</p>}
+          {pct === 100 && <p className="celebrate">🎉 Học xong hết rồi! Capybara tự hào về bạn lắm!</p>}
+          <p className="muted small">Việc riêng (không phải TOEIC) nằm ở mục <button className="link" onClick={() => go('home')}>🏡 Cá nhân</button>.</p>
         </section>
 
         <div className="stack">
-          <section className="card">
-            <h2>🎯 Mục tiêu học hôm nay</h2>
+          <section className="card tint-blue">
+            <Title icon="🎯">Mục tiêu học hôm nay</Title>
             <ul className="goal-list">
               <li onClick={() => go('flash')}><span>🃏</span> Ôn {dueCards} thẻ đến hạn + {profile.dailyNew} từ mới</li>
               <li onClick={() => go('practice', { ref: picks.topic })}><span>🧠</span> Ngữ pháp: {grammarName(picks.topic)}</li>
@@ -170,8 +136,8 @@ export default function Dashboard({ go }) {
             <p className="tip">💡 {info.week.tip}</p>
           </section>
 
-          <section className="card">
-            <div className="row between"><h2>📈 Tiến độ tuần</h2><span className="pill">{Math.round((weekDone / weekTotal) * 100)}%</span></div>
+          <section className="card tint-green">
+            <div className="row between"><Title icon="📈">Tiến độ tuần</Title><span className="pill">{Math.round((weekDone / weekTotal) * 100)}%</span></div>
             <div className="week-bars">
               {weekData.map((d) => {
                 const h = d.total ? (d.done / d.total) * 100 : 0
@@ -183,11 +149,11 @@ export default function Dashboard({ go }) {
                 )
               })}
             </div>
-            <p className="muted small">{weekDone} việc đã xong trong tuần này</p>
+            <p className="muted small">{weekDone} việc học đã xong trong tuần này</p>
           </section>
 
-          <section className="card">
-            <h2>🔁 Cần ôn lại</h2>
+          <section className="card tint-pink">
+            <Title icon="🔁">Cần ôn lại</Title>
             <ul className="review-list">
               <li onClick={() => go('flash')}><b>{dueCards}</b> flashcard đến hạn</li>
               {weakTopics.slice(0, 4).map((g) => (

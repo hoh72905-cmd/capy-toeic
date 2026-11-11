@@ -25,7 +25,7 @@ export default function Session({ go }) {
   return (
     <div className="page">
       <div className="row between">
-        <button className="btn sm" onClick={() => go('home')}>← Trang chính</button>
+        <button className="btn sm" onClick={() => go('toeic')}>← Tổng quan TOEIC</button>
         <span className="muted small">Buổi học hôm nay</span>
       </div>
       <ol className="stepper">
@@ -47,7 +47,7 @@ export default function Session({ go }) {
           <Mascot size={130} mood="cheer" className="bob" />
           <h2>Hoàn thành buổi học! 🎉</h2>
           <p>Các việc tương ứng trong to-do list đã được đánh dấu xong.</p>
-          <button className="btn yellow" onClick={() => go('home')}>Về trang chính</button>
+          <button className="btn yellow" onClick={() => go('toeic')}>Về tổng quan TOEIC</button>
         </div>
       )}
     </div>

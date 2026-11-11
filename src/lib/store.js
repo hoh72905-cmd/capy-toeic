@@ -14,6 +14,8 @@ const initial = () => ({
   notes: [],
   customLessons: [],
   curri: {}, // Kaggle curriculum lessons done: { lessonId: date }
+  reminders: [], // personal reminders: exams, deadlines, notes
+  toeicDay: null, // last date the TOEIC tasks were added to the to-do list
 })
 
 function load() {

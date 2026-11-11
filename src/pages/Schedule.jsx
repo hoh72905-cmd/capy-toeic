@@ -34,7 +34,7 @@ function Weeks() {
   return (
     <>
       <div className="card">
-        <p className="muted">3 chặng × 4 tuần, co giãn vừa khít đến ngày thi. Mỗi ngày ~45 phút, chia thành các bài ngắn 5–10 phút. Việc mỗi ngày tự vào to-do list ở trang chính.</p>
+        <p className="muted">3 chặng × 4 tuần, co giãn vừa khít đến ngày thi. Mỗi ngày ~45 phút, chia thành các bài ngắn 5–10 phút. Việc học mỗi ngày tự vào danh sách ở Tổng quan TOEIC.</p>
         <div className="progress big"><div style={{ width: `${Math.min(100, (info.dayIndex / info.total) * 100)}%` }} /></div>
         <p className="small muted">Ngày {Math.min(info.total, info.dayIndex + 1)}/{info.total} · {profile.examDate ? 'Ngày thi' : 'Ngày thi dự kiến (chưa đặt)'}: {fromKey(end).toLocaleDateString('vi-VN')}</p>
       </div>

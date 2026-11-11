@@ -3,8 +3,16 @@
 Website + app Android học TOEIC 800 trong 3 tháng. Miễn phí 100%, dữ liệu lưu ngay trên máy.
 
 ## Có gì bên trong
-- **Hôm nay (trang chính):** lời chào, trạng thái học, to-do list tự điền theo lộ trình, mục tiêu hôm nay, tiến độ tuần, phần cần ôn lại, nút **Bắt đầu buổi học** (~25 phút).
-- **Ngày thi & mục tiêu:** chọn ngày thi, điểm mục tiêu, điểm hiện tại. Trang chính đếm ngược, lộ trình tự co giãn vừa khít đến ngày thi.
+App chia làm 2 khu trên thanh menu:
+
+### 🏡 Cá nhân (trang mở đầu)
+- **Việc của mình:** to-do list tự tạo theo từng ngày (dải 7 ngày để chọn ngày, lên kế hoạch trước được), gắn nhãn Cá nhân / Học tập / Công việc / Sức khỏe / Vui chơi, đánh dấu ⭐ quan trọng, đặt giờ, sửa nhanh, chuyển việc dở hôm qua sang hôm nay.
+- **Nhắc nhở & lưu ý:** ghi lịch thi, deadline, sự kiện, lưu ý; app tự đếm ngược ("Ngày mai", "Còn 5 ngày"), việc gấp (≤ 2 ngày) hiện thanh chuông ở đầu trang. Ngày thi TOEIC tự xuất hiện ở đây.
+- **TOEIC hôm nay:** tóm tắt việc học trong ngày và nút vào học.
+
+### 🎓 TOEIC (gom toàn bộ phần học)
+- **Tổng quan:** trạng thái học, việc học hôm nay (tự điền theo lộ trình), mục tiêu, tiến độ tuần, phần cần ôn lại, nút **Bắt đầu buổi học** (~25 phút).
+- **Ngày thi & mục tiêu:** chọn ngày thi, điểm mục tiêu, điểm hiện tại. Tổng quan TOEIC đếm ngược, lộ trình tự co giãn vừa khít đến ngày thi.
 - **Lộ trình 12 tuần:** 3 chặng (Nền tảng → Kỹ năng → Tăng tốc), mỗi tuần có chủ điểm ngữ pháp, mục tiêu điểm và việc cụ thể từng ngày.
 - **Khung kiến thức (từ Kaggle):** 195 bài TOEIC Listening & Reading (ngữ pháp A1–B2, chủ đề từ vựng, kỹ năng nghe Part 1–4, đọc Part 5–7). App lọc theo điểm mục tiêu, sắp thứ tự theo bài cần học trước, và chia đều đến ngày thi.
 - **Flashcard:** 165 thẻ, lặp lại ngắt quãng (1 → 2 → 4 → 7 → 15 → 30 ngày).
@@ -17,7 +25,10 @@ Website + app Android học TOEIC 800 trong 3 tháng. Miễn phí 100%, dữ li�
   - Thành thạo → giãn lịch ôn
 - **Từ vựng word family:** 44 họ từ, đồng nghĩa, trái nghĩa, câu ví dụ có mệnh đề.
 - **Bôi đen chữ tiếng Anh bất kỳ** → dịch + phát âm + lưu vào sổ tay.
-- **Sổ tay:** nút 📝 ghi chú nhanh ở mọi trang, danh sách từ đã lưu, sao lưu/khôi phục dữ liệu.
+- **Sổ tay:** nút 📝 ghi chú nhanh ở mọi trang, danh sách từ đã lưu.
+
+### ⚙️ Cài đặt
+- Tên hiển thị, ngày thi & mục tiêu, sao lưu/khôi phục dữ liệu.
 
 ## Chạy trên máy
 ```bash
