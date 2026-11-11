@@ -8,6 +8,7 @@ import { useStreak, greeting } from '../lib/hooks.js'
 import { confetti, confettiAt } from '../lib/confetti.js'
 import { examInfo } from '../lib/curriculum.js'
 import { useCloud } from '../lib/cloud.js'
+import { GoogleButton } from '../components/Account.jsx'
 
 const TAGS = [
   { id: 'life', icon: '🏡', name: 'Cá nhân', color: '#ffd54f' },
@@ -350,12 +351,16 @@ function ToeicMini({ go }) {
 function SyncInvite({ go }) {
   const c = useCloud()
   const [hide, setHide] = useState(() => { try { return localStorage.getItem('capy-sync-invite') === 'no' } catch { return false } })
+  const [err, setErr] = useState('')
   if (c.email || c.status !== 'off' || hide) return null
   return (
     <div className="sync-invite">
       <span className="big-ico">☁️</span>
-      <div className="grow"><b>Đồng bộ web ↔ app</b><div className="small">Đăng nhập một tài khoản để học ở đâu cũng thấy cùng dữ liệu.</div></div>
-      <button className="btn blue sm" onClick={() => go('settings')}>Đăng nhập</button>
+      <div className="grow"><b>Đồng bộ web ↔ app</b><div className="small">Đăng nhập để học ở đâu cũng thấy cùng dữ liệu.{err && <span className="txt-pink"> {err}</span>}</div></div>
+      <div className="invite-actions">
+        <GoogleButton small onError={setErr} />
+        <button className="link small" onClick={() => go('settings')}>Dùng email</button>
+      </div>
       <button className="icon-btn sm" title="Ẩn" onClick={() => { setHide(true); try { localStorage.setItem('capy-sync-invite', 'no') } catch { /* ignore */ } }}>✕</button>
     </div>
   )

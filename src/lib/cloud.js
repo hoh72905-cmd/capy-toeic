@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import { Capacitor } from '@capacitor/core'
 import { getState, onLocalChange, replaceFromCloud, clearLocalData, freshState } from './store.js'
 import { diff, encode, decode, merge, DELETE } from './syncCodec.js'
 
@@ -13,6 +14,7 @@ const CONFIG = {
   "appId": "1:778661498815:web:5ac4324ab7e91e61491b0a"
 }
 
+const isNative = Capacitor.isNativePlatform()
 const FLAG = 'capy-cloud-on' // remembered so we only load Firebase for signed-in learners
 const UID_KEY = 'capy-cloud-uid' // which account the data on this device belongs to
 
@@ -31,8 +33,11 @@ async function load() {
   if (fb) return fb
   const [{ initializeApp }, A, F] = await Promise.all([import('firebase/app'), import('firebase/auth'), import('firebase/firestore')])
   const app = initializeApp(CONFIG)
-  // No popup/redirect helpers: email + password works the same in browsers and the Android app
-  const auth = A.initializeAuth(app, { persistence: [A.indexedDBLocalPersistence, A.browserLocalPersistence] })
+  // Browsers get the Google popup helper; the Android app signs in to Google natively instead
+  const auth = A.initializeAuth(app, {
+    persistence: [A.indexedDBLocalPersistence, A.browserLocalPersistence],
+    ...(isNative ? {} : { popupRedirectResolver: A.browserPopupRedirectResolver }),
+  })
   let db
   try {
     db = F.initializeFirestore(app, { ignoreUndefinedProperties: true, localCache: F.persistentLocalCache({ tabManager: F.persistentMultipleTabManager() }) })
@@ -123,6 +128,16 @@ function stopSync() {
   unsubDoc = unsubLocal = ref = null
 }
 
+let listening = false
+async function listenAuth() {
+  const { auth, A } = await load()
+  if (listening) return
+  listening = true
+  A.onAuthStateChanged(auth, (user) => {
+    if (user) { if (!ref) startSync(user) } else { stopSync(); set({ status: 'off', email: null }) }
+  })
+}
+
 // Called once at app start: reconnect if this device was signed in before
 let started = false
 export async function initCloud() {
@@ -133,10 +148,7 @@ export async function initCloud() {
   if (!on) return
   set({ status: 'connecting' })
   try {
-    const { auth, A } = await load()
-    A.onAuthStateChanged(auth, (user) => {
-      if (user) { if (!ref) startSync(user) } else { stopSync(); set({ status: 'off', email: null }) }
-    })
+    await listenAuth()
   } catch {
     set({ status: 'offline', message: 'Chưa tải được phần đồng bộ (đang offline?)' })
     started = false
@@ -153,9 +165,15 @@ const AUTH_ERR = {
   'auth/user-not-found': 'Chưa có tài khoản với email này — chọn “Tạo tài khoản”.',
   'auth/too-many-requests': 'Thử quá nhiều lần, đợi vài phút rồi thử lại.',
   'auth/network-request-failed': 'Không có mạng. Kết nối mạng rồi thử lại.',
-  'auth/operation-not-allowed': 'Đăng nhập bằng email chưa được bật trên Firebase.',
+  'auth/operation-not-allowed': 'Cách đăng nhập này chưa được bật trên Firebase.',
+  'auth/unauthorized-domain': 'Trang này chưa được phép đăng nhập Google. Hãy mở capy-toeic.vercel.app.',
+  'auth/account-exists-with-different-credential': 'Email này đã đăng ký bằng mật khẩu — đăng nhập bằng email + mật khẩu nhé.',
+  'auth/no-token': 'Không lấy được tài khoản Google trên máy. Thử lại hoặc dùng email.',
 }
-export const authMessage = (e) => AUTH_ERR[e?.code] || 'Có lỗi xảy ra, thử lại nhé.'
+// Closing the Google window is not an error worth showing
+export const isCancel = (e) => ['auth/popup-closed-by-user', 'auth/cancelled-popup-request', 'auth/user-cancelled'].includes(e?.code)
+  || /cancel/i.test(e?.message || '')
+export const authMessage = (e) => AUTH_ERR[e?.code] || (e?.code ? `Có lỗi xảy ra (${e.code}), thử lại nhé.` : 'Có lỗi xảy ra, thử lại nhé.')
 
 export async function signIn(email, password, create = false) {
   const { auth, A } = await load()
@@ -163,13 +181,42 @@ export async function signIn(email, password, create = false) {
     ? await A.createUserWithEmailAndPassword(auth, email.trim(), password)
     : await A.signInWithEmailAndPassword(auth, email.trim(), password)
   try { localStorage.setItem(FLAG, '1') } catch { /* ignore */ }
-  if (!started) {
-    started = true
-    A.onAuthStateChanged(auth, (user) => {
-      if (user) { if (!ref) startSync(user) } else { stopSync(); set({ status: 'off', email: null }) }
-    })
-  }
+  started = true
+  await listenAuth()
   return cred.user
+}
+
+// One tap: sign in with a Google account already on the phone / in the browser
+export async function signInWithGoogle() {
+  const { auth, A } = await load()
+  try { localStorage.setItem(FLAG, '1') } catch { /* ignore */ }
+  started = true
+  await listenAuth()
+  try {
+    if (isNative) {
+      // Google does not allow its sign-in page inside an app's web view: use Android's account picker
+      const { FirebaseAuthentication } = await import('@capacitor-firebase/authentication')
+      const r = await FirebaseAuthentication.signInWithGoogle({ skipNativeAuth: true })
+      const idToken = r?.credential?.idToken
+      if (!idToken) throw Object.assign(new Error('no token'), { code: 'auth/no-token' })
+      return (await A.signInWithCredential(auth, A.GoogleAuthProvider.credential(idToken))).user
+    }
+    const provider = new A.GoogleAuthProvider()
+    provider.setCustomParameters({ prompt: 'select_account' })
+    try {
+      return (await A.signInWithPopup(auth, provider)).user
+    } catch (e) {
+      // Popups blocked (some phones / in-app browsers): go through a full-page redirect instead
+      if (['auth/popup-blocked', 'auth/operation-not-supported-in-this-environment', 'auth/web-storage-unsupported'].includes(e.code)) {
+        await A.signInWithRedirect(auth, provider)
+        return null
+      }
+      throw e
+    }
+  } catch (e) {
+    if (!auth.currentUser) { try { localStorage.removeItem(FLAG) } catch { /* ignore */ } }
+    throw e
+  }
 }
 
 export async function signOutCloud() {
@@ -178,6 +225,9 @@ export async function signOutCloud() {
   try { await F.waitForPendingWrites(db) } catch { /* offline: Firestore keeps them and retries */ }
   try { localStorage.removeItem(FLAG) } catch { /* ignore */ }
   await A.signOut(auth)
+  if (isNative) {
+    try { (await import('@capacitor-firebase/authentication')).FirebaseAuthentication.signOut() } catch { /* ignore */ }
+  }
   // The next person using this device starts clean; this account's data stays in the cloud
   clearLocalData()
   try { localStorage.removeItem(UID_KEY) } catch { /* ignore */ }

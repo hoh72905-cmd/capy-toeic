@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "778661498815",
+    "project_id": "toeic-28241",
+    "storage_bucket": "toeic-28241.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:778661498815:android:fe0cb644cead1daf491b0a",
+        "android_client_info": {
+          "package_name": "com.capytoeic.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "778661498815-l9tmq1mi3pn6ejuak58c5io0vug0ktid.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.capytoeic.app",
+            "certificate_hash": "3440b4e7f273aac06e2d980b6aacffeb07d9985a"
+          }
+        },
+        {
+          "client_id": "778661498815-2m3i7bhsdgolq8lhbcaf5m8i6e4l3kvj.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyALKXgB-Cviq4L_CMHKsOzmQkY844zquyY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "778661498815-2m3i7bhsdgolq8lhbcaf5m8i6e4l3kvj.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
