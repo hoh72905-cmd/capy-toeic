@@ -5,6 +5,8 @@ import Schedule from './pages/Schedule.jsx'
 import Flashcards from './pages/Flashcards.jsx'
 import Listening from './pages/Listening.jsx'
 import Practice from './pages/Practice.jsx'
+import Reading from './pages/Reading.jsx'
+import Shadowing from './pages/Shadowing.jsx'
 import Vocab from './pages/Vocab.jsx'
 import Notebook from './pages/Notebook.jsx'
 import Session from './pages/Session.jsx'
@@ -23,7 +25,9 @@ const TOEIC_NAV = [
   { id: 'plan', icon: '🗓️', label: 'Lộ trình' },
   { id: 'flash', icon: '🃏', label: 'Flashcard' },
   { id: 'listen', icon: '🎧', label: 'Nghe chép' },
-  { id: 'practice', icon: '🧠', label: 'Luyện tập' },
+  { id: 'shadow', icon: '🗣️', label: 'Shadowing' },
+  { id: 'practice', icon: '🧠', label: 'Part 5' },
+  { id: 'read', icon: '📖', label: 'Part 6–7' },
   { id: 'vocab', icon: '📚', label: 'Từ vựng' },
   { id: 'notes', icon: '📒', label: 'Sổ tay' },
 ]
@@ -75,6 +79,8 @@ export default function App() {
     case 'flash': content = <Flashcards key={key} />; break
     case 'listen': content = <Listening key={key} params={params} />; break
     case 'practice': content = <Practice key={key} params={params} />; break
+    case 'read': content = <Reading key={key} params={params} />; break
+    case 'shadow': content = <Shadowing key={key} params={params} />; break
     case 'vocab': content = <Vocab key={key} params={params} />; break
     case 'notes': content = <Notebook key={key} params={params} />; break
     case 'session': content = <Session go={go} />; break

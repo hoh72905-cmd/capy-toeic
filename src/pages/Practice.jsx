@@ -1,24 +1,30 @@
-import { useMemo, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { GRAMMAR, COACH } from '../data/quiz.js'
 import { useStore, setState, getState, logActivity } from '../lib/store.js'
 import { freshTopic, pickQuestion, afterAnswer, masteryLabel } from '../lib/adaptive.js'
 import { todayKey, diffDays } from '../lib/date.js'
 import { planInfo } from '../data/plan.js'
+import { dailyPlan } from '../lib/course.js'
 import Mascot from '../components/Mascot.jsx'
 
 const LETTERS = ['A', 'B', 'C', 'D']
 
 export default function Practice({ params, onDone, limit }) {
-  const { topics, profile } = useStore()
+  const store = useStore()
+  const { topics, profile, qDone } = store
   const [topicId, setTopicId] = useState(params?.ref || null)
+  const plan = dailyPlan(store)
+  const p5 = plan.part5
   const today = todayKey()
 
   const smartPick = () => {
     const week = planInfo(profile, today).week
+    // Due / weak topics first, then topics of this week, and only topics that still have unseen questions
+    const left = (g) => g.qs.filter((q) => !qDone[q.id]).length
     const ranked = [...GRAMMAR].sort((a, b) => {
       const sa = topics[a.id], sb = topics[b.id]
-      const da = sa ? (sa.due <= today ? 0 : 2) + sa.box * 0.1 : (week.grammar.includes(a.id) ? -1 : 1)
-      const db = sb ? (sb.due <= today ? 0 : 2) + sb.box * 0.1 : (week.grammar.includes(b.id) ? -1 : 1)
+      const da = (sa ? (sa.due <= today ? 0 : 2) + sa.box * 0.1 : (week.grammar.includes(a.id) ? -1 : 1)) + (left(a) ? 0 : 5)
+      const db = (sb ? (sb.due <= today ? 0 : 2) + sb.box * 0.1 : (week.grammar.includes(b.id) ? -1 : 1)) + (left(b) ? 0 : 5)
       return da - db
     })
     setTopicId(ranked[0].id)
@@ -34,6 +40,10 @@ export default function Practice({ params, onDone, limit }) {
       <div className="page-head">
         <h1>🧠 Luyện ngữ pháp thích ứng</h1>
         <p className="muted">Đúng → tăng độ khó / chuyển sang dạng vận dụng. Sai → chỉ ra nguyên nhân. Sai nhiều lần → quay lại kiến thức nền. Hiểu lý thuyết mà vẫn sai → bài tập ứng dụng từng bước. Thành thạo → giãn lịch ôn.</p>
+        <div className="day-goal">
+          <span>🎯 Part 5 hôm nay: <b>{p5.doneToday}/{p5.goal || p5.review}</b> câu{p5.review ? ' (đã làm hết ngân hàng câu, đang ôn lại câu sai)' : ''} · đã làm {p5.learned}/{p5.total} câu trong lộ trình</span>
+          <div className="progress"><div style={{ width: `${Math.min(100, (p5.doneToday / Math.max(1, p5.goal || p5.review)) * 100)}%` }} /></div>
+        </div>
         <button className="btn yellow" onClick={smartPick}>✨ Ôn thông minh (chọn giúp mình)</button>
       </div>
       <div className="topic-grid">
@@ -46,7 +56,7 @@ export default function Practice({ params, onDone, limit }) {
               <b>{g.name}</b>
               <div className="mastery"><div style={{ width: `${((st?.box || 0) / 6) * 100}%` }} /></div>
               <span className="muted small">
-                {st ? `${masteryLabel(st.box)} · ${st.correct}/${st.attempts} đúng` : 'Chưa học'}
+                {st ? `${masteryLabel(st.box)} · ${st.correct}/${st.attempts} đúng` : 'Chưa học'} · còn {g.qs.filter((q) => !qDone[q.id]).length}/{g.qs.length} câu mới
                 {st && (due ? ' · 🔔 đến hạn ôn' : ` · ôn lại sau ${diffDays(today, st.due)} ngày`)}
               </span>
             </button>
@@ -72,10 +82,11 @@ function Coach({ events, mood }) {
 }
 
 function Session({ topic, limit, onExit, embedded }) {
-  const saved = getState().topics[topic.id]
+  const [saved] = useState(() => getState().topics[topic.id]) // state at the start of this session
   const [st, setSt] = useState(() => ({ ...freshTopic(), ...saved }))
   const seen = useRef(new Set())
-  const [q, setQ] = useState(() => pickQuestion(topic, { ...freshTopic(), ...saved }, seen.current))
+  const pick = (stNow) => pickQuestion(topic, stNow, seen.current, getState().qDone || {})
+  const [q, setQ] = useState(() => pick({ ...freshTopic(), ...saved }))
   const [phase, setPhase] = useState('question')
   const [chosen, setChosen] = useState(null)
   const [fb, setFb] = useState(null)
@@ -85,7 +96,7 @@ function Session({ topic, limit, onExit, embedded }) {
   const [tc, setTc] = useState(null)
   const [tcPick, setTcPick] = useState(null)
   const [showSteps, setShowSteps] = useState(false)
-  const startBox = useMemo(() => saved?.box || 0, [saved])
+  const startBox = saved?.box || 0
 
   const persist = (next) => { setSt(next); setState((s) => ({ topics: { ...s.topics, [topic.id]: next } })) }
 
@@ -95,6 +106,10 @@ function Session({ topic, limit, onExit, embedded }) {
     const ok = i === q.a
     const r = afterAnswer(st, ok)
     persist(r.st)
+    seen.current.add(q)
+    // Remember the question for the course (first date) and whether the last try was right
+    setState((s) => ({ qDone: { ...s.qDone, [q.id]: { d: s.qDone?.[q.id]?.d || todayKey(), ok } } }))
+    logActivity('quiz', 1, 1)
     setFb(r)
     setCount((c) => c + 1)
     if (ok) setRight((x) => x + 1)
@@ -103,16 +118,12 @@ function Session({ topic, limit, onExit, embedded }) {
   const nextQ = () => {
     if (fb?.next === 'theory') { setPhase('theory'); setChosen(null); setFb(null); return }
     if (count >= limit) { finish(); return }
-    seen.current.add(q)
-    setQ(pickQuestion(topic, st, seen.current))
+    setQ(pick(st))
     setChosen(null); setFb(null); setShowSteps(false)
     setPhase('question')
   }
 
-  const finish = () => {
-    logActivity('quiz', count, Math.max(1, Math.round(count * 0.8)))
-    setPhase('summary')
-  }
+  const finish = () => setPhase('summary')
 
   const startCheck = () => {
     setTc(topic.tc[Math.floor(Math.random() * topic.tc.length)])
@@ -178,7 +189,7 @@ function Session({ topic, limit, onExit, embedded }) {
               )}
               <div className="explain">
                 <p>🇻🇳 {q.vi}</p>
-                <p className="en">🇬🇧 {q.en}</p>
+                {q.en && <p className="en">🇬🇧 {q.en}</p>}
               </div>
               <Coach events={fb.events.filter((e) => e !== 'correct' || fb.events.length === 1)} mood={coachMood} />
               <div className="row between">
@@ -216,14 +227,14 @@ function Session({ topic, limit, onExit, embedded }) {
           {tcPick !== null && (tcPick === tc.a ? (
             <>
               <p className="ok-box">✅ Bạn nắm lý thuyết rồi! Nếu làm bài vẫn sai, app sẽ chuyển sang bài tập ứng dụng từng bước.</p>
-              <button className="btn yellow wide" onClick={() => { setPhase('question'); setChosen(null); setQ(pickQuestion(topic, st, seen.current)) }}>Luyện tiếp ➜</button>
+              <button className="btn yellow wide" onClick={() => { setPhase('question'); setChosen(null); setQ(pick(st)) }}>Luyện tiếp ➜</button>
             </>
           ) : (
             <>
               <p className="cause">Chưa đúng — đáp án là <b>{tc.o[tc.a]}</b>. Đọc lại phần nền một lần nữa nhé.</p>
               <div className="row gap-s">
                 <button className="btn" onClick={() => setPhase('theory')}>📘 Xem lại lý thuyết</button>
-                <button className="btn yellow" onClick={() => { setPhase('question'); setChosen(null); setQ(pickQuestion(topic, st, seen.current)) }}>Luyện tiếp</button>
+                <button className="btn yellow" onClick={() => { setPhase('question'); setChosen(null); setQ(pick(st)) }}>Luyện tiếp</button>
               </div>
             </>
           ))}
@@ -239,7 +250,7 @@ function Session({ topic, limit, onExit, embedded }) {
           <div className="row gap-s center-row">
             {embedded ? <button className="btn yellow" onClick={onExit}>Tiếp tục ➜</button> : <>
               <button className="btn" onClick={onExit}>← Chủ điểm khác</button>
-              <button className="btn blue" onClick={() => { setCount(0); setRight(0); setPhase('question'); setChosen(null); setFb(null); setQ(pickQuestion(topic, st, seen.current)) }}>Luyện thêm 10 câu</button>
+              <button className="btn blue" onClick={() => { setCount(0); setRight(0); setPhase('question'); setChosen(null); setFb(null); setQ(pick(st)) }}>Luyện thêm 10 câu</button>
             </>}
           </div>
         </div>

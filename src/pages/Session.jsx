@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useStore, getState, setState } from '../lib/store.js'
 import { todayKey } from '../lib/date.js'
 import { dayPicks, grammarName } from '../data/plan.js'
+import { nextItems } from '../lib/course.js'
 import Flashcards from './Flashcards.jsx'
 import Practice from './Practice.jsx'
 import Listening from './Listening.jsx'
@@ -10,12 +11,15 @@ import Mascot from '../components/Mascot.jsx'
 
 // One guided study session built from today's plan
 export default function Session({ go }) {
-  const { profile } = useStore()
+  const store = useStore()
+  const { profile } = store
   const picks = dayPicks(profile, todayKey())
+  // Next dictation lesson of the course (never one already done), else the plan's pick
+  const [lesson] = useState(() => nextItems(store, 'listen')[0] || picks.lesson)
   const steps = [
     { key: 'flash', label: '🃏 Flashcard', sub: '~5 phút' },
     { key: 'quiz', label: `🧠 ${grammarName(picks.topic)}`, sub: '8 câu thích ứng' },
-    { key: 'listen', label: `🎧 ${picks.lesson.title}`, sub: '~6 phút' },
+    { key: 'listen', label: `🎧 ${lesson.title}`, sub: '~6 phút' },
     { key: 'vocab', label: `📚 ${picks.family.words[0][0]}`, sub: 'word family' },
   ]
   // Resume today's session at the step where it was left
@@ -44,7 +48,7 @@ export default function Session({ go }) {
         <div className="step-body">
           {steps[i].key === 'flash' && <Flashcards limit={12} onDone={next} />}
           {steps[i].key === 'quiz' && <Practice params={{ ref: picks.topic }} limit={8} onDone={next} />}
-          {steps[i].key === 'listen' && <Listening params={{ ref: picks.lesson.id }} onDone={next} />}
+          {steps[i].key === 'listen' && <Listening params={{ ref: lesson.id }} onDone={next} />}
           {steps[i].key === 'vocab' && <Vocab params={{ ref: picks.family.id }} onDone={next} />}
           <button className="link small skip" onClick={next}>Bỏ qua phần này →</button>
         </div>

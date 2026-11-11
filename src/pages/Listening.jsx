@@ -4,12 +4,13 @@ import { useStore, setState, getState, logActivity } from '../lib/store.js'
 import { speak, stopSpeak, useSpeaking, soundHint } from '../lib/speech.js'
 import { uid, todayKey } from '../lib/date.js'
 import Mascot from '../components/Mascot.jsx'
+import { dailyPlan, nextItems } from '../lib/course.js'
 
-const ACCENT_NAME = { us: '🇺🇸 Mỹ', uk: '🇬🇧 Anh', au: '🇦🇺 Úc' }
+export const ACCENT_NAME = { us: '🇺🇸 Mỹ', ca: '🇨🇦 Canada', uk: '🇬🇧 Anh', au: '🇦🇺 Úc' }
 const fmt = (sec) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`
 
 // Longest common subsequence: which expected words did the learner get?
-function diffWords(expected, typed) {
+export function diffWords(expected, typed) {
   const a = expected.split(' '); const b = typed.split(' ').filter(Boolean)
   const dp = Array.from({ length: a.length + 1 }, () => Array(b.length + 1).fill(0))
   for (let i = a.length - 1; i >= 0; i--) for (let j = b.length - 1; j >= 0; j--) {
@@ -24,10 +25,15 @@ function diffWords(expected, typed) {
 }
 
 export default function Listening({ params, onDone }) {
-  const { customLessons, listenDone, listenProgress } = useStore()
+  const store = useStore()
+  const { customLessons, listenDone, listenProgress } = store
   const all = useMemo(() => [...LESSONS, ...customLessons], [customLessons])
   const [current, setCurrent] = useState(() => all.find((l) => l.id === params?.ref) || null)
   const [adding, setAdding] = useState(false)
+  const [filter, setFilter] = useState('toeic')
+  const plan = dailyPlan(store).listen
+  const today = nextItems(store, 'listen')
+  const shown = all.filter((l) => (filter === 'toeic' ? !l.tatoeba && !l.custom : filter === 'daily' ? l.tatoeba : l.custom))
 
   if (current) return <Player lesson={current} onBack={onDone ? null : () => setCurrent(null)} onDone={onDone} />
 
@@ -35,10 +41,27 @@ export default function Listening({ params, onDone }) {
     <div className="page">
       <div className="page-head">
         <h1>🎧 Nghe & chép</h1>
-        <p className="muted">Mỗi bài ~10 câu, khoảng 5–6 phút — vừa đủ tập trung rồi đổi chủ đề. Có 2 dạng: <b>đục lỗ</b> (điền từ khóa) và <b>nguyên câu</b>.</p>
+        <p className="muted">Mỗi bài ~10 câu, khoảng 5–6 phút — vừa đủ tập trung rồi đổi chủ đề. Có 2 dạng: <b>đục lỗ</b> (điền từ khóa) và <b>nguyên câu</b>. Giọng Mỹ 🇺🇸, Canada 🇨🇦, Anh 🇬🇧, Úc 🇦🇺 như đề thật.</p>
+        <div className="day-goal"><span>🎯 Hôm nay: <b>{plan.doneToday}/{plan.goal}</b> bài · đã nghe {plan.learned}/{plan.total} bài trong lộ trình</span></div>
+      </div>
+      {today.length > 0 && <>
+        <h2 className="section-title">⭐ Bài của hôm nay</h2>
+        <div className="lesson-grid">
+          {today.map((l) => (
+            <button key={l.id} className="card lesson-card" onClick={() => setCurrent(l)}>
+              <span className="lesson-scene">{l.scene}</span>
+              <div><b>{l.title}</b><p className="muted small">{l.part} · {ACCENT_NAME[l.accent]} · {l.s.length} câu</p></div>
+            </button>
+          ))}
+        </div>
+      </>}
+      <div className="seg">
+        <button className={filter === 'toeic' ? 'on' : ''} onClick={() => setFilter('toeic')}>🎓 Kiểu đề TOEIC ({LESSONS.filter((l) => !l.tatoeba).length})</button>
+        <button className={filter === 'daily' ? 'on' : ''} onClick={() => setFilter('daily')}>💬 Câu thông dụng ({LESSONS.filter((l) => l.tatoeba).length})</button>
+        <button className={filter === 'mine' ? 'on' : ''} onClick={() => setFilter('mine')}>🌟 Bài của tôi ({customLessons.length})</button>
       </div>
       <div className="lesson-grid">
-        {all.map((l) => (
+        {shown.map((l) => (
           <button key={l.id} className="card lesson-card" onClick={() => setCurrent(l)}>
             <span className="lesson-scene">{l.scene}</span>
             <div>
@@ -174,7 +197,7 @@ function Player({ lesson, onBack, onDone }) {
       setFinished(true)
       const avg = Math.round(newScores.reduce((a, b) => a + b, 0) / newScores.length)
       const prev = listenDone[lesson.id]?.best || 0
-      setState((s) => ({ listenDone: { ...s.listenDone, [lesson.id]: { best: Math.max(prev, avg), last: avg, mode, date: todayKey() } } }))
+      setState((s) => ({ listenDone: { ...s.listenDone, [lesson.id]: { best: Math.max(prev, avg), last: avg, mode, date: todayKey(), first: s.listenDone[lesson.id]?.first || s.listenDone[lesson.id]?.date || todayKey() } } }))
       logActivity('listen', 1, Math.max(1, Math.round(elapsed / 60)))
     } else {
       saveProgress({ idx: idx + 1, scores: newScores })

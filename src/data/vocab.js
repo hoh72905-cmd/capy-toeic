@@ -333,3 +333,36 @@ export const CARDS = FAMILIES.flatMap((f) =>
 )
 
 export const TOPICS = [...new Set(FAMILIES.map((f) => f.topic))]
+
+// ---- TOEIC Service List (Kaggle jimregan/toeic-service-list, CC BY-SA 4.0) ----
+// 1,259 words ordered by how often they appear in TOEIC materials; Vietnamese meanings added by Capy TOEIC.
+// Example sentences from Tatoeba (CC BY 2.0 FR) where one was found.
+import TSL from './tsl.json' with { type: 'json' }
+import EXAMPLES from './examples.json' with { type: 'json' }
+
+export const TSL_SOURCE = TSL.source
+const DECK_SIZE = 100
+export const TSL_CARDS = TSL.words
+  .map(([w, pos, vi, def], rank) => ({ w, pos, vi, def, rank }))
+  .filter((c) => !DICT.has(c.w.toLowerCase())) // already taught in a word family
+  .map((c) => {
+    const ex = EXAMPLES.examples[c.w]
+    const from = Math.floor(c.rank / DECK_SIZE) * DECK_SIZE
+    return { id: `tsl:${c.w}`, topic: `TOEIC ${from + 1}–${from + DECK_SIZE}`, w: c.w, pos: c.pos, vi: c.vi, def: c.def, rank: c.rank + 1, ex: ex ? [ex[0], ex[1]] : null, tsl: true }
+  })
+for (const c of TSL_CARDS) DICT.set(c.w.toLowerCase(), { w: c.w, pos: c.pos, vi: c.vi })
+export const TSL_DECKS = [...new Set(TSL_CARDS.map((c) => c.topic))]
+
+// Order for new words: TOEIC list by frequency, with the word families mixed in
+export const ALL_CARDS = (() => {
+  const out = []
+  const every = Math.max(1, Math.round(TSL_CARDS.length / CARDS.length))
+  let f = 0
+  TSL_CARDS.forEach((c, i) => {
+    out.push(c)
+    if (i % every === every - 1 && f < CARDS.length) out.push(CARDS[f++])
+  })
+  while (f < CARDS.length) out.push(CARDS[f++])
+  return out
+})()
+export const CARD_BY_ID = new Map(ALL_CARDS.map((c) => [c.id, c]))

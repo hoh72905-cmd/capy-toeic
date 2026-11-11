@@ -11,10 +11,11 @@ import { LESSONS } from '../data/listening.js'
 import { isDue, MASTERED_BOX } from '../lib/srs.js'
 import { todayCurriculum, examInfo } from '../lib/curriculum.js'
 import { isToeic } from '../lib/today.js'
+import { dailyPlan } from '../lib/course.js'
 import { useStreak, greeting } from '../lib/hooks.js'
 import { confetti, confettiAt } from '../lib/confetti.js'
 
-const KIND_PAGE = { flash: 'flash', listen: 'listen', quiz: 'practice', vocab: 'vocab', curri: 'plan' }
+const KIND_PAGE = { flash: 'flash', listen: 'listen', quiz: 'practice', vocab: 'vocab', curri: 'plan', read6: 'read', read7: 'read', shadow: 'shadow' }
 
 // Overview of the TOEIC area: status, today's study tasks, week progress, review
 export default function ToeicHome({ go }) {
@@ -27,6 +28,7 @@ export default function ToeicHome({ go }) {
   const list = (todos[today] || []).filter(isToeic)
   const [text, setText] = useState('')
   const streak = useStreak()
+  const course = dailyPlan(useStore())
   const goals = profile.goals || []
   const goalsDone = goals.filter((g) => (goalLog[today] || []).includes(g.id)).length
 
@@ -135,12 +137,15 @@ export default function ToeicHome({ go }) {
             {!profile.hideSuggest && <>
               <p className="goal-sub">✨ Gợi ý từ lộ trình</p>
               <ul className="goal-list">
-                <li onClick={() => go('flash')}><span>🃏</span> Ôn {dueCards} thẻ đến hạn + {profile.dailyNew} từ mới</li>
-                <li onClick={() => go('practice', { ref: picks.topic })}><span>🧠</span> Ngữ pháp: {grammarName(picks.topic)}</li>
-                <li onClick={() => go('listen', { ref: picks.lesson.id })}><span>🎧</span> Nghe chép: {picks.lesson.title} (~6p)</li>
-                <li onClick={() => go('vocab', { ref: picks.family.id })}><span>📚</span> Word family: <b>{picks.family.words[0][0]}</b></li>
+                <CourseRow icon="🃏" label="Từ mới" g={course.words} unit="từ" extra={dueCards ? ` + ôn ${dueCards} thẻ` : ''} onClick={() => go('flash')} />
+                <CourseRow icon="🧠" label="Part 5" g={course.part5} unit="câu" onClick={() => go('practice')} />
+                <CourseRow icon="📄" label="Part 6" g={course.part6} unit="đoạn" onClick={() => go('read', { ref: 'p6' })} />
+                <CourseRow icon="📰" label="Part 7" g={course.part7} unit="bài" onClick={() => go('read', { ref: 'p7' })} />
+                <CourseRow icon="🎧" label="Nghe chép" g={course.listen} unit="bài" onClick={() => go('listen')} />
+                <CourseRow icon="🗣️" label="Shadowing" g={course.shadow} unit="bài" onClick={() => go('shadow')} />
                 {curriToday.list.length > 0 && <li onClick={() => go('plan', { ref: 'curri' })}><span>📘</span> Khung kiến thức: {curriToday.list.length} bài · đã xong {curriToday.doneCount}/{curriToday.total}</li>}
               </ul>
+              <p className="muted small">⏱ Khoảng {course.minutes} phút hôm nay · còn {course.win.daysLeft} ngày học{profile.examDate ? ' trước tuần ôn đề cuối' : ''}. Mỗi bài chỉ giao một lần — không trùng lặp.</p>
               <p className="tip">💡 {info.week.tip}</p>
             </>}
             <button className="link small" onClick={() => setState((st) => ({ profile: { ...st.profile, hideSuggest: !st.profile.hideSuggest } }))}>
@@ -265,5 +270,18 @@ function MyGoals({ today }) {
         </div>
       )}
     </div>
+  )
+}
+
+// One line of today's course: "Part 5: 12/20 câu · 45/211 trong lộ trình"
+function CourseRow({ icon, label, g, unit, extra = '', onClick }) {
+  const goal = g.goal || g.review || 0
+  const done = Math.min(g.doneToday, goal || g.doneToday)
+  const ok = goal > 0 && done >= goal
+  return (
+    <li onClick={onClick} className={ok ? 'goal-done' : ''}>
+      <span>{icon}</span> <b>{label}:</b> {goal ? <>{done}/{goal} {unit}{extra}</> : <span className="muted">hôm nay không có bài mới{extra}</span>}
+      <span className="muted small"> · {g.learned}/{g.total} trong lộ trình</span>{ok && ' ✅'}
+    </li>
   )
 }

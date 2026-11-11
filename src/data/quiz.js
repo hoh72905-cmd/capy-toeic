@@ -3,10 +3,12 @@
 // o options, a correct index, why[i] = reason each option is right/wrong (VI), vi/en = explanation.
 // tc = theory-check questions (does the learner understand the rule itself?)
 
+import { MORE, NEW_TOPICS } from './quizMore.js'
+
 const Q = (lv, t, q, o, a, why, vi, en) => ({ lv, t, q, o, a, why, vi, en })
 const TC = (q, o, a) => ({ q, o, a })
 
-export const GRAMMAR = [
+const BASE = [
   {
     id: 'wordform', name: 'Từ loại', emoji: '🧩',
     theory: {
@@ -373,6 +375,12 @@ export const GRAMMAR = [
 ]
 
 // Bilingual coach lines for each situation in the adaptive flow
+// All topics: the original questions + the extra ones (quizMore.js) + the new Kaggle topics.
+// Every question gets a stable id (topic:index) so the course never gives the same question twice.
+export const GRAMMAR = [...BASE.map((t) => ({ ...t, qs: [...t.qs, ...(MORE[t.id] || [])] })), ...NEW_TOPICS]
+  .map((t) => ({ ...t, qs: t.qs.map((q, i) => ({ ...q, id: `${t.id}:${i}` })) }))
+export const ALL_QUESTIONS = GRAMMAR.flatMap((t) => t.qs.map((q) => ({ ...q, topic: t.id })))
+
 export const COACH = {
   correct: { vi: 'Chuẩn luôn! 🎉', en: 'Spot on!' },
   levelUp: { vi: 'Đúng liên tiếp rồi — mình tăng độ khó nhé! ⬆️', en: 'Two in a row — let’s level up!' },

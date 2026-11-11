@@ -2,7 +2,7 @@
 // Each top-level part is split into small fields, so two devices editing different things
 // (e.g. to-dos of different days, different notes) never overwrite each other.
 
-export const MAPS = ['activity', 'cards', 'topics', 'listenDone', 'listenProgress', 'curri', 'goalLog'] // key → value
+export const MAPS = ['activity', 'cards', 'topics', 'listenDone', 'listenProgress', 'curri', 'goalLog', 'qDone', 'reading', 'shadow'] // key → value
 export const LISTS = ['saved', 'notes', 'customLessons', 'reminders'] // arrays of { id, … }
 export const SCALARS = ['profile', 'toeicDay', 'sessionProgress'] // stored whole
 
@@ -115,6 +115,9 @@ export function merge(local, cloud) {
   pick('listenDone', (l, c) => (l.best || 0) > (c.best || 0))
   pick('listenProgress', (l, c) => (l.idx || 0) > (c.idx || 0))
   out.curri = { ...local.curri, ...cloud.curri }
+  out.shadow = { ...local.shadow, ...cloud.shadow }
+  out.qDone = { ...local.qDone, ...cloud.qDone }
+  pick('reading', (l, c) => (l.best || 0) > (c.best || 0))
   out.goalLog = { ...local.goalLog }
   for (const [day, ids] of Object.entries(cloud.goalLog || {})) out.goalLog[day] = [...new Set([...(local.goalLog?.[day] || []), ...ids])]
   for (const k of LISTS) out[k] = sortList(k, unionList(local[k], cloud[k]))

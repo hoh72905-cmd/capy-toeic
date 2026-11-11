@@ -1,6 +1,8 @@
 // Dictation lessons, each about 5–6 minutes. s: [English, Vietnamese]
 // accent: us | uk | au (TOEIC mixes accents)
-export const LESSONS = [
+import MORE from './listenMore.json' with { type: 'json' }
+
+const BASE = [
   {
     id: 'l1', title: 'Ở văn phòng buổi sáng', part: 'Part 1 · Mô tả tranh', scene: '🏢', accent: 'us', level: 1,
     s: [
@@ -186,6 +188,10 @@ export const LESSONS = [
 const STOP = new Set('a an the is are am was were be been being to of in on at for by with and or but if as it its this that these those i you he she we they me him her us them my your our their do does did have has had will would can could should may might shall not no so than then there here from into up out about just very please'.split(' '))
 
 // Pick key words to blank out (content words, longest first, max 3)
+// TOEIC-style lessons first, then the everyday-sentence lessons built from Tatoeba (scripts/build_tatoeba.py)
+export const LESSONS = [...BASE, ...MORE.lessons]
+export const TATOEBA = { source: MORE.source, license: MORE.license }
+
 export function blanksFor(sentence) {
   const tokens = sentence.split(/\s+/)
   const cands = tokens

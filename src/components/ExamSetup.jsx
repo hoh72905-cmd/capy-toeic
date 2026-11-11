@@ -3,6 +3,7 @@ import { useStore, setState } from '../lib/store.js'
 import { todayKey, addDays, fromKey, diffDays } from '../lib/date.js'
 import { cefrFor, requiredLessons, requiredComps, skippedLessons, todayCurriculum, examInfo } from '../lib/curriculum.js'
 import { totalDays } from '../data/plan.js'
+import { dailyPlan } from '../lib/course.js'
 
 const QUICK = [600, 700, 800, 900]
 // TOEIC scores go from 10 to 990 in steps of 5
@@ -36,7 +37,9 @@ function ScoreInput({ value, onSave, placeholder, optional }) {
 
 // Exam date + target score + current score, with a summary of the plan they give
 export default function ExamSetup({ compact }) {
-  const { profile, curri } = useStore()
+  const store = useStore()
+  const { profile, curri } = store
+  const course = dailyPlan(store)
   const today = todayKey()
   const set = (patch) => setState((s) => ({ profile: { ...s.profile, ...patch } }))
   const target = profile.targetScore || 800
@@ -95,6 +98,19 @@ export default function ExamSetup({ compact }) {
           {skipped.length > 0 && <> App đã bỏ qua <b>{skipped.length} bài</b> ở trình độ bạn đã vượt qua.</>}
         </p>
       )}
+      <div className="load-box">
+        <b>📦 Khối lượng học mỗi ngày (tự tính theo mục tiêu và thời gian còn lại)</b>
+        <div className="load-grid">
+          <span>🃏 <b>{course.words.goal}</b> từ mới</span>
+          <span>🧠 <b>{course.part5.goal || course.part5.review}</b> câu Part 5</span>
+          <span>📄 Part 6: <b>{course.part6.total}</b> đoạn / {course.win.daysLeft} ngày</span>
+          <span>📰 Part 7: <b>{course.part7.total}</b> bài / {course.win.daysLeft} ngày</span>
+          <span>🎧 <b>{course.listen.goal}</b> bài nghe chép</span>
+          <span>🗣️ <b>{course.shadow.goal}</b> bài shadowing</span>
+        </div>
+        <p className="muted small">≈ {course.minutes} phút/ngày. Toàn bộ {course.words.total} từ, {course.part5.total} câu Part 5, {course.part6.total + course.part7.total} bài đọc và {course.listen.total} bài nghe được chia đều đến {fromKey(course.win.end).toLocaleDateString('vi-VN')}, mỗi bài chỉ giao một lần. Thời gian càng ngắn hoặc mục tiêu càng cao thì mỗi ngày càng nhiều.</p>
+        {course.words.goal >= 60 && course.words.total - course.words.learned > course.win.daysLeft * 60 && <p className="warn small">⚠️ Không đủ thời gian để học hết {course.words.total} từ (tối đa 60 từ/ngày) — app ưu tiên từ hay gặp nhất trong đề.</p>}
+      </div>
       {perWeek > 40 && <p className="warn small">⚠️ Mức tăng này khá gắt so với thời gian còn lại. Nên học nhiều hơn mỗi ngày, lùi ngày thi, hoặc đặt mục tiêu chặng giữa (VD: {fixScore(current + Math.round(weeksLeft * 30))}) rồi nâng dần.</p>}
 
       {profile.examDate ? (

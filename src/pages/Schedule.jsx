@@ -1,5 +1,7 @@
 import { useState } from 'react'
-import { WEEKS, PHASES, planInfo, tasksFor, grammarName, weekRange, weekTarget } from '../data/plan.js'
+import { WEEKS, PHASES, planInfo, grammarName, weekRange, weekTarget } from '../data/plan.js'
+import { planTasks } from '../lib/today.js'
+import { getState } from '../lib/store.js'
 import { useStore } from '../lib/store.js'
 import { todayKey, addDays, fromKey, VI_DAYS } from '../lib/date.js'
 import ExamSetup from '../components/ExamSetup.jsx'
@@ -63,7 +65,7 @@ function Weeks() {
                     <p className="tip">💡 {w.tip}</p>
                     <div className="days">
                       {days.map((d) => {
-                        const list = todos[d] || tasksFor(profile, d)
+                        const list = todos[d] || planTasks(getState(), d)
                         const done = (todos[d] || []).filter((t) => t.done).length
                         return (
                           <div key={d} className={`day ${d === today ? 'today' : ''}`}>

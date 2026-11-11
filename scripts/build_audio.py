@@ -28,6 +28,10 @@ VOICES = {  # name: (model, speaker)
     'us1': ('en_US-ljspeech-medium', None), 'us2': ('en_US-libritts_r-medium', '922'),
     'uk1': ('en_GB-cori-medium', None), 'uk2': ('en_GB-vctk-medium', 'p254'),
     'au1': ('en_GB-vctk-medium', 'p326'), 'au2': ('en_GB-cori-medium', None),
+    # more North American voices (VCTK speaker accents: p294 US/San Francisco, p360 US/New Jersey,
+    # p303 Canada/Toronto, p316 Canada/Alberta)
+    'us3': ('en_GB-vctk-medium', 'p294'), 'us4': ('en_GB-vctk-medium', 'p360'),
+    'ca1': ('en_GB-vctk-medium', 'p303'), 'ca2': ('en_GB-vctk-medium', 'p316'),
 }
 loaded = {}
 def voice(name):

@@ -9,7 +9,7 @@ import AUDIO from '../data/audio.json'
 //    the native engine in the Android app, speechSynthesis in browsers.
 
 const isNative = Capacitor.isNativePlatform()
-const ACCENT_LANG = { us: 'en-US', uk: 'en-GB', au: 'en-AU' }
+const ACCENT_LANG = { us: 'en-US', ca: 'en-CA', uk: 'en-GB', au: 'en-AU' }
 const norm = (t) => t.trim().toLowerCase()
 
 // ---- who is speaking right now (for ▶ / ⏹ buttons) ----

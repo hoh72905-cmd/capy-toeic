@@ -1,12 +1,13 @@
 import { useSyncExternalStore } from 'react'
 import { todayKey } from './date.js'
+import { dailyPlan } from './course.js'
 
 const KEY = 'capy-toeic-v1'
 const BACKUP_KEY = 'capy-toeic-backup' // copy of the last good data, refreshed once a day
 const BROKEN_KEY = 'capy-toeic-broken' // unreadable data is kept here instead of being overwritten
 
 const initial = () => ({
-  profile: { name: 'Quyên', startDate: todayKey(), examDate: null, targetScore: 800, currentScore: null, dailyNew: 15, goals: [] }, // goals: learner's own daily goals [{ id, text, ts }]
+  profile: { name: 'Quyên', startDate: todayKey(), examDate: null, targetScore: 800, currentScore: null, dailyNew: 15, autoNew: true, goals: [] }, // goals: learner's own daily goals [{ id, text, ts }]
   todos: {},
   activity: {},
   cards: {},
@@ -20,6 +21,9 @@ const initial = () => ({
   curri: {}, // Kaggle curriculum lessons done: { lessonId: date }
   reminders: [], // personal reminders: exams, deadlines, notes
   goalLog: {}, // own daily goals ticked off: { day: [goalId] }
+  qDone: {}, // Part 5 questions answered: { questionId: { d: first date, ok: last answer right } }
+  reading: {}, // Part 6/7 texts done: { id: { score, best, date } }
+  shadow: {}, // shadowing lessons done: { lessonId: date }
   toeicDay: null, // last date the TOEIC tasks were added to the to-do list
   savedAt: null,
 })
@@ -144,6 +148,12 @@ export function markTodoKind(kind) {
     const list = s.todos[k] || []
     const idx = list.findIndex((t) => t.kind === kind && !t.done)
     if (idx < 0) return {}
+    // Tasks with an amount (e.g. 20 Part 5 questions) tick only when the amount is reached
+    const t = list[idx]
+    if (t.goalKey) {
+      const done = t.goalKey === 'part5' ? (s.activity[k]?.quiz || 0) : dailyPlan(s, k)[t.goalKey]?.doneToday || 0
+      if (done < (t.goal || 1)) return {}
+    }
     const copy = list.slice()
     copy[idx] = { ...copy[idx], done: true }
     return { todos: { ...s.todos, [k]: copy } }

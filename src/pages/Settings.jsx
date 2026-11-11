@@ -30,7 +30,8 @@ export default function Settings() {
       <div className="card form tint-yellow">
         <Title icon="🙋">Hồ sơ</Title>
         <label>Tên hiển thị<input value={profile.name} onChange={(e) => set('name', e.target.value)} /></label>
-        <label>Số từ mới mỗi ngày (flashcard)<input type="number" min={5} max={40} value={profile.dailyNew} onChange={(e) => set('dailyNew', Math.max(5, Math.min(40, Number(e.target.value) || 15)))} /></label>
+        <label className="row gap-s"><input type="checkbox" style={{ width: 'auto' }} checked={profile.autoNew !== false} onChange={(e) => set('autoNew', e.target.checked)} /> Số từ mới mỗi ngày tự tính theo lộ trình (khuyên dùng)</label>
+        {profile.autoNew === false && <label>Số từ mới mỗi ngày (flashcard)<input type="number" min={5} max={80} value={profile.dailyNew} onChange={(e) => set('dailyNew', Math.max(5, Math.min(80, Number(e.target.value) || 15)))} /></label>}
       </div>
       <ExamSetup />
       <div className="card form tint-blue">

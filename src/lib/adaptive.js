@@ -7,14 +7,18 @@ import { INTERVALS } from './srs.js'
 // theoryOK: passed the theory check, box: review spacing (higher = less often)
 export const freshTopic = () => ({ level: 1, streak: 0, wrongs: 0, mode: 'normal', theoryOK: null, box: 0, due: todayKey(), attempts: 0, correct: 0 })
 
-export function pickQuestion(topic, st, seen) {
+// done: questions answered on earlier days ({ id: … }) — never repeated while unseen ones remain
+export function pickQuestion(topic, st, seen, done = {}) {
   let pool
   if (st.mode === 'apply') pool = topic.qs.filter((q) => q.t === 'a')
   else if (st.mode === 'guided') pool = topic.qs.filter((q) => q.t === 'p' && q.lv <= Math.max(2, st.level))
   else pool = topic.qs.filter((q) => q.t === 'p' && q.lv === st.level)
   if (!pool.length) pool = topic.qs
-  const fresh = pool.filter((q) => !seen.has(q))
-  const list = fresh.length ? fresh : pool
+  const unseen = (list) => list.filter((q) => !seen.has(q) && !done[q.id])
+  // 1) unseen questions at the right level/mode, 2) any unseen question of the topic,
+  // 3) questions answered wrong before, 4) anything not asked in this session
+  const list = [unseen(pool), unseen(topic.qs), topic.qs.filter((q) => !seen.has(q) && done[q.id] && !done[q.id].ok), pool.filter((q) => !seen.has(q)), pool]
+    .find((l) => l.length)
   return list[Math.floor(Math.random() * list.length)]
 }
 
