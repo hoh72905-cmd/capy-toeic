@@ -6,9 +6,10 @@ import { speak } from '../lib/speech.js'
 import Speak from '../components/Speak.jsx'
 
 export default function Vocab({ params, onDone }) {
-  const [topic, setTopic] = useState('all')
+  const topicRef = params?.ref?.startsWith('t:') ? params.ref.slice(2) : null
+  const [topic, setTopic] = useState(topicRef || 'all')
   const [q, setQ] = useState('')
-  const [open, setOpen] = useState(params?.ref || null)
+  const [open, setOpen] = useState(topicRef ? null : params?.ref || null)
   const list = useMemo(() => FAMILIES.filter((f) =>
     (topic === 'all' || f.topic === topic)
     && (!q || f.words.some(([w, , vi]) => w.includes(q.toLowerCase()) || vi.toLowerCase().includes(q.toLowerCase())))), [topic, q])

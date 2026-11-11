@@ -7,8 +7,10 @@ import { CARDS } from '../data/vocab.js'
 import { GRAMMAR } from '../data/quiz.js'
 import { LESSONS } from '../data/listening.js'
 import { isDue, MASTERED_BOX } from '../lib/srs.js'
+import { todayCurriculum, examInfo } from '../lib/curriculum.js'
+import ExamSetup from '../components/ExamSetup.jsx'
 
-const KIND_PAGE = { flash: 'flash', listen: 'listen', quiz: 'practice', vocab: 'vocab' }
+const KIND_PAGE = { flash: 'flash', listen: 'listen', quiz: 'practice', vocab: 'vocab', curri: 'plan' }
 
 function greeting() {
   const h = new Date().getHours()
@@ -35,9 +37,11 @@ export function useStreak() {
 export default function Dashboard({ go }) {
   const s = useStore()
   const today = todayKey()
-  const { profile, todos, cards, topics, listenDone } = s
-  const info = planInfo(profile.startDate, today)
-  const picks = dayPicks(profile.startDate, today)
+  const { profile, todos, cards, topics, listenDone, curri } = s
+  const info = planInfo(profile, today)
+  const picks = dayPicks(profile, today)
+  const exam = examInfo(profile, today)
+  const curriToday = todayCurriculum(profile, curri, today)
   const list = todos[today] || []
   const [text, setText] = useState('')
   const streak = useStreak()
@@ -45,10 +49,13 @@ export default function Dashboard({ go }) {
   // First visit of the day: fill the to-do list from the 3-month plan
   useEffect(() => {
     if (!todos[today]) {
-      const auto = tasksFor(profile.startDate, today).map((t) => ({ ...t, id: uid(), done: false, auto: true }))
+      const auto = tasksFor(profile, today).map((t) => ({ ...t, id: uid(), done: false, auto: true }))
+      // Today's lessons from the Kaggle curriculum, spread evenly until the exam
+      const cur = todayCurriculum(profile, curri, today)
+      if (cur.list.length) auto.push({ id: uid(), done: false, auto: true, kind: 'curri', ref: 'curri', min: cur.list.length * 8, text: `📘 Khung kiến thức: ${cur.list.length} bài hôm nay` })
       setState((st) => ({ todos: { ...st.todos, [today]: auto } }))
     }
-  }, [today, todos, profile.startDate])
+  }, [today, todos, profile, curri])
 
   const yesterday = addDays(today, -1)
   const leftover = (todos[yesterday] || []).filter((t) => !t.done && !t.auto && !t.moved)
@@ -97,14 +104,17 @@ export default function Dashboard({ go }) {
           <h1>{profile.name} ơi, hôm nay mình cùng học nhé!</h1>
           <div className="stat-row">
             <span className="stat"><b>🔥 {streak}</b> ngày liên tiếp</span>
-            <span className="stat"><b>📅 Tuần {info.week.n}</b>/12 · ngày {Math.min(84, info.dayIndex + 1)}/84</span>
-            <span className="stat"><b>🎯 {info.week.target}</b> mục tiêu tuần</span>
+            <span className="stat"><b>📅 Tuần {info.week.n}</b>/12 · ngày {Math.min(info.total, info.dayIndex + 1)}/{info.total}</span>
+            {exam.exam && <span className="stat exam-chip" onClick={() => go('plan', { ref: 'exam' })}><b>⏳ {Math.max(0, exam.daysLeft)}</b> ngày nữa thi</span>}
+            <span className="stat"><b>🎯 {info.target}</b> mục tiêu tuần · đích {exam.target} ({exam.cefr?.cefr})</span>
             <span className="stat"><b>⭐ {learned}</b> từ thành thạo</span>
           </div>
           <p className="phase-tag" style={{ background: PHASES[info.week.phase].color }}>{PHASES[info.week.phase].name} — {info.week.title}</p>
           <Mascot size={64} mood={mood} className="bob hero-mascot" />
         </div>
       </section>
+
+      {!profile.examDate && <ExamSetup compact />}
 
       <button className="btn start-btn" onClick={() => go('session')}>
         <span>🚀 Bắt đầu buổi học</span>
@@ -155,6 +165,7 @@ export default function Dashboard({ go }) {
               <li onClick={() => go('practice', { ref: picks.topic })}><span>🧠</span> Ngữ pháp: {grammarName(picks.topic)}</li>
               <li onClick={() => go('listen', { ref: picks.lesson.id })}><span>🎧</span> Nghe chép: {picks.lesson.title} (~6p)</li>
               <li onClick={() => go('vocab', { ref: picks.family.id })}><span>📚</span> Word family: <b>{picks.family.words[0][0]}</b></li>
+              {curriToday.list.length > 0 && <li onClick={() => go('plan', { ref: 'curri' })}><span>📘</span> Khung kiến thức: {curriToday.list.length} bài · đã xong {curriToday.doneCount}/{curriToday.total}</li>}
             </ul>
             <p className="tip">💡 {info.week.tip}</p>
           </section>

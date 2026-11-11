@@ -355,3 +355,17 @@ hr { border: 0; border-top: 2px dashed var(--line); width: 100%; }
 .sel-text { font-weight: 800; max-height: 60px; overflow: auto; }
 .sel-local { background: var(--green-soft); border-radius: 10px; padding: 4px 8px; font-size: .9rem; }
 .sel-vi { font-size: .95rem; }
+
+/* Exam setup & curriculum */
+.exam-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); margin-bottom: 10px; }
+.exam-grid label { display: flex; flex-direction: column; gap: 4px; font-weight: 700; font-size: .9rem; }
+.exam-grid select { width: 100%; }
+.exam-summary { display: flex; gap: 14px; align-items: center; background: var(--yellow-soft); border-radius: 16px; padding: 12px 14px; }
+.exam-summary p { margin: 3px 0; }
+.countdown { flex: none; width: 92px; height: 92px; border-radius: 24px; background: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 3px 0 var(--yellow-deep); }
+.countdown b { font-family: 'Baloo 2', sans-serif; font-size: 2.1rem; line-height: 1; color: var(--blue-deep); }
+.countdown span { font-size: .72rem; font-weight: 800; text-align: center; }
+.warn { color: var(--pink-deep); font-weight: 700; }
+.exam-chip { cursor: pointer; background: var(--yellow) !important; }
+.extra { opacity: .65; }
+@media (max-width: 520px) { .exam-summary { flex-direction: column; align-items: flex-start; } }

@@ -14,7 +14,7 @@ export default function Practice({ params, onDone, limit }) {
   const today = todayKey()
 
   const smartPick = () => {
-    const week = planInfo(profile.startDate, today).week
+    const week = planInfo(profile, today).week
     const ranked = [...GRAMMAR].sort((a, b) => {
       const sa = topics[a.id], sb = topics[b.id]
       const da = sa ? (sa.due <= today ? 0 : 2) + sa.box * 0.1 : (week.grammar.includes(a.id) ? -1 : 1)

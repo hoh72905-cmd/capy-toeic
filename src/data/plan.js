@@ -27,15 +27,35 @@ export const PHASES = {
 
 export const grammarName = (id) => GRAMMAR.find((g) => g.id === id)?.name || id
 
-export function planInfo(startDate, date) {
-  const d = Math.max(0, diffDays(startDate, date))
-  const weekIdx = Math.min(11, Math.floor(d / 7))
-  return { dayIndex: d, week: WEEKS[weekIdx], weekIdx, dayInWeek: d % 7, finished: d >= 84 }
+// Length of the plan: from the start date to the exam date (or 84 days if no exam date yet)
+export function totalDays(profile) {
+  if (!profile.examDate) return 84
+  return Math.max(14, diffDays(profile.startDate, profile.examDate))
+}
+
+// Day range [from, to) of each of the 12 weeks, stretched or squeezed to fit the exam date
+export function weekRange(profile, idx) {
+  const T = totalDays(profile)
+  return [Math.floor((idx * T) / 12), Math.floor(((idx + 1) * T) / 12)]
+}
+
+// Weekly score target, rising from the current score to the target score
+export function weekTarget(profile, idx) {
+  const goal = profile.targetScore || 800
+  const base = Math.min(goal - 50, profile.currentScore || Math.round(goal * 0.6))
+  return Math.round((base + ((goal - base) * (idx + 1)) / 12) / 5) * 5
+}
+
+export function planInfo(profile, date) {
+  const T = totalDays(profile)
+  const d = Math.max(0, diffDays(profile.startDate, date))
+  const weekIdx = Math.min(11, Math.floor((d * 12) / T))
+  return { dayIndex: d, total: T, week: WEEKS[weekIdx], weekIdx, target: weekTarget(profile, weekIdx), finished: d >= T }
 }
 
 // Lesson / topic / family suggested for a given day of the plan
-export function dayPicks(startDate, date) {
-  const { dayIndex, week } = planInfo(startDate, date)
+export function dayPicks(profile, date) {
+  const { dayIndex, week } = planInfo(profile, date)
   const maxLevel = week.phase
   const pool = LESSONS.filter((l) => l.level <= maxLevel + 1)
   const lesson = pool[dayIndex % pool.length]
@@ -44,9 +64,9 @@ export function dayPicks(startDate, date) {
   return { lesson, topic, family }
 }
 
-export function tasksFor(startDate, date) {
-  const { week, dayInWeek } = planInfo(startDate, date)
-  const { lesson, topic, family } = dayPicks(startDate, date)
+export function tasksFor(profile, date) {
+  const { week } = planInfo(profile, date)
+  const { lesson, topic, family } = dayPicks(profile, date)
   const dow = fromKey(date).getDay() // 0 = Sunday
   if (dow === 0) {
     return [
@@ -65,6 +85,5 @@ export function tasksFor(startDate, date) {
   if ([1, 3, 5].includes(dow)) list.push({ text: '📖 Đọc Part 7: 1–2 đoạn (bấm giờ)', kind: 'custom', min: 10 })
   if ([2, 4].includes(dow)) list.push({ text: '🎧 Nghe Part 3–4 trên đề thật (1 bộ)', kind: 'custom', min: 10 })
   if (dow === 6) list.push({ text: week.phase === 1 ? '📝 Mini test 30 câu Part 5' : '📝 Mini test Part 5–6 bấm giờ', kind: 'custom', min: 15 })
-  void dayInWeek
   return list
 }

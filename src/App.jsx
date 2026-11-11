@@ -46,7 +46,7 @@ export default function App() {
   const key = `${page}-${params.ref || ''}`
   let content
   switch (page) {
-    case 'plan': content = <Schedule />; break
+    case 'plan': content = <Schedule key={key} params={params} go={go} />; break
     case 'flash': content = <Flashcards key={key} />; break
     case 'listen': content = <Listening key={key} params={params} />; break
     case 'practice': content = <Practice key={key} params={params} />; break

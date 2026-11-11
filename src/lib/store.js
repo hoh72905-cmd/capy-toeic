@@ -4,7 +4,7 @@ import { todayKey } from './date.js'
 const KEY = 'capy-toeic-v1'
 
 const initial = () => ({
-  profile: { name: 'Quyên', startDate: todayKey(), target: 800, dailyNew: 15 },
+  profile: { name: 'Quyên', startDate: todayKey(), examDate: null, targetScore: 800, currentScore: null, dailyNew: 15 },
   todos: {},
   activity: {},
   cards: {},
@@ -13,6 +13,7 @@ const initial = () => ({
   saved: [],
   notes: [],
   customLessons: [],
+  curri: {}, // Kaggle curriculum lessons done: { lessonId: date }
 })
 
 function load() {

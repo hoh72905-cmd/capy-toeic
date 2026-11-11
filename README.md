@@ -4,7 +4,9 @@ Website + app Android học TOEIC 800 trong 3 tháng. Miễn phí 100%, dữ li�
 
 ## Có gì bên trong
 - **Hôm nay (trang chính):** lời chào, trạng thái học, to-do list tự điền theo lộ trình, mục tiêu hôm nay, tiến độ tuần, phần cần ôn lại, nút **Bắt đầu buổi học** (~25 phút).
+- **Ngày thi & mục tiêu:** chọn ngày thi, điểm mục tiêu, điểm hiện tại. Trang chính đếm ngược, lộ trình tự co giãn vừa khít đến ngày thi.
 - **Lộ trình 12 tuần:** 3 chặng (Nền tảng → Kỹ năng → Tăng tốc), mỗi tuần có chủ điểm ngữ pháp, mục tiêu điểm và việc cụ thể từng ngày.
+- **Khung kiến thức (từ Kaggle):** 195 bài TOEIC Listening & Reading (ngữ pháp A1–B2, chủ đề từ vựng, kỹ năng nghe Part 1–4, đọc Part 5–7). App lọc theo điểm mục tiêu, sắp thứ tự theo bài cần học trước, và chia đều đến ngày thi.
 - **Flashcard:** 165 thẻ, lặp lại ngắt quãng (1 → 2 → 4 → 7 → 15 → 30 ngày).
 - **Nghe chép:** 12 bài × 10 câu (~5–6 phút/bài), giọng Mỹ/Anh/Úc, 2 dạng: đục lỗ và nguyên câu. Có thể tự tạo bài.
 - **Luyện ngữ pháp thích ứng:** 11 chủ điểm Part 5/6.
@@ -43,6 +45,10 @@ vercel --prod
 **Hoặc:** dán link Vercel vào https://www.pwabuilder.com → Package for stores → Android để tải APK.
 
 Có Android Studio thì có thể build ngay trên máy: `npm run android:sync` rồi `npx cap open android`.
+
+## Nguồn dữ liệu
+- Khung kiến thức, mốc điểm TOEIC → CEFR và thứ tự bài học: [English Test Prep Data: TOEIC, IELTS, TOEFL](https://www.kaggle.com/datasets/duongduong123/english-test-prep-data-toeic-ielts-toefl) của duongduong123, giấy phép **Open Database License (ODbL)**. File `src/data/curriculum.js` được tạo bằng `python3 scripts/build_curriculum.py <thư mục CSV đã giải nén>`.
+- Từ vựng, câu ví dụ, bài nghe chép và câu hỏi ngữ pháp: tự soạn cho app.
 
 ## Ghi chú
 - Dịch tự động dùng MyMemory (miễn phí, khoảng 5.000 ký tự/ngày). 165+ từ trong bộ từ vựng được tra ngay cả khi không có mạng.

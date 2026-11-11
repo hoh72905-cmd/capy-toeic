@@ -11,7 +11,7 @@ import Mascot from '../components/Mascot.jsx'
 // One guided study session built from today's plan
 export default function Session({ go }) {
   const { profile } = useStore()
-  const picks = dayPicks(profile.startDate, todayKey())
+  const picks = dayPicks(profile, todayKey())
   const steps = [
     { key: 'flash', label: '🃏 Flashcard', sub: '~5 phút' },
     { key: 'quiz', label: `🧠 ${grammarName(picks.topic)}`, sub: '8 câu thích ứng' },
