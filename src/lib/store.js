@@ -24,6 +24,9 @@ const initial = () => ({
   qDone: {}, // Part 5 questions answered: { questionId: { d: first date, ok: last answer right } }
   reading: {}, // Part 6/7 texts done: { id: { score, best, date } }
   shadow: {}, // shadowing lessons done: { lessonId: date }
+  convo: { start: 0, xp: 0, placed: null, daily: 7, recent: [] }, // conversation level (stage), XP, placement date
+  convoItems: {}, // conversation sentences / phrases studied: spaced repetition state
+  convoDays: {}, // conversation day log: { date: { plan, n, ok, xp, done } }
   toeicDay: null, // last date the TOEIC tasks were added to the to-do list
   savedAt: null,
 })
@@ -31,7 +34,7 @@ const initial = () => ({
 // Fill in fields added in newer versions without touching what the learner already has
 function upgrade(data) {
   const base = initial()
-  return { ...base, ...data, profile: { ...base.profile, ...(data.profile || {}) } }
+  return { ...base, ...data, profile: { ...base.profile, ...(data.profile || {}) }, convo: { ...base.convo, ...(data.convo || {}) } }
 }
 
 function read(key) {

@@ -1,5 +1,5 @@
 import { getState, setState } from './store.js'
-import { todayKey } from './date.js'
+import { todayKey, addDays } from './date.js'
 import { dayPicks } from '../data/plan.js'
 import { todayCurriculum } from './curriculum.js'
 import { dailyPlan, nextItems } from './course.js'
@@ -28,10 +28,29 @@ export function planTasks(state, date) {
   return list
 }
 
+// The cloud copy is one Firestore document (max 1 MB): drop study tasks the app made more than
+// 90 days ago (your own to-dos stay), and yesterday's conversation plans (the day's score stays).
+export function pruneOld() {
+  const s = getState()
+  const limit = addDays(todayKey(), -90)
+  const today = todayKey()
+  const oldDays = Object.keys(s.todos).filter((d) => d < limit && (s.todos[d] || []).some((t) => t.auto))
+  const oldPlans = Object.keys(s.convoDays || {}).filter((d) => d < today && s.convoDays[d]?.plan)
+  if (!oldDays.length && !oldPlans.length) return
+  setState((st) => {
+    const todos = { ...st.todos }
+    for (const d of oldDays) { const keep = (todos[d] || []).filter((t) => !t.auto); if (keep.length) todos[d] = keep; else delete todos[d] }
+    const convoDays = { ...st.convoDays }
+    for (const d of oldPlans) { const { plan, done, ...rest } = convoDays[d]; convoDays[d] = rest }
+    return { todos, convoDays }
+  })
+}
+
 const TASK_VERSION = 2 // tasks sized by the course (older versions had fixed tasks)
 
 // Once a day: add today's TOEIC tasks (course + curriculum lessons)
 export function ensureToeicToday() {
+  pruneOld()
   const s = getState()
   const today = todayKey()
   const list = s.todos[today] || []

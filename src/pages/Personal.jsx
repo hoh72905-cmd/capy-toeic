@@ -1,3 +1,5 @@
+import { phrasesOfDay, levelInfo, streak as talkStreak } from '../lib/convo.js'
+import Speak from '../components/Speak.jsx'
 import { useState } from 'react'
 import Mascot from '../components/Mascot.jsx'
 import Title from '../components/Title.jsx'
@@ -123,6 +125,7 @@ export default function Personal({ go }) {
       <div className="grid-2">
         <TodoCard />
         <div className="stack">
+          <TalkMini go={go} />
           <Reminders items={reminders} go={go} />
           <ToeicMini go={go} />
         </div>
@@ -363,5 +366,28 @@ function SyncInvite({ go }) {
       </div>
       <button className="icon-btn sm" title="Ẩn" onClick={() => { setHide(true); try { localStorage.setItem('capy-sync-invite', 'no') } catch { /* ignore */ } }}>✕</button>
     </div>
+  )
+}
+
+// Conversation phrases of the day: seen every day on the home page, so they stick
+function TalkMini({ go }) {
+  const state = useStore()
+  const phrases = phrasesOfDay(state)
+  const lvl = levelInfo(state.convo)
+  const today = state.convoDays[todayKey()]
+  const st = talkStreak(state.convoDays)
+  return (
+    <section className="card tint-green talk-mini">
+      <div className="row between">
+        <Title icon="💬">Câu giao tiếp hôm nay</Title>
+        <span className="pill green">{state.convo.placed ? `${lvl.name} · 🔥 ${st}` : 'Mới'}</span>
+      </div>
+      <ul className="phrase-list">
+        {phrases.map((p) => <li key={p.id}><Speak text={p.en} small /> <b>{p.en}</b><br /><span className="muted small">{p.vi}</span></li>)}
+      </ul>
+      <button className="btn green wide" onClick={() => go('talk')}>
+        {!state.convo.placed ? '📝 Kiểm tra trình độ & bắt đầu' : (today?.n || 0) >= 5 ? '✓ Đã giữ chuỗi hôm nay — luyện thêm' : `▶ Luyện giao tiếp (${today?.n || 0}/5 câu)`}
+      </button>
+    </section>
   )
 }

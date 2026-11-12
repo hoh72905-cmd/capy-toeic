@@ -6,6 +6,7 @@ import Flashcards from './pages/Flashcards.jsx'
 import Listening from './pages/Listening.jsx'
 import Practice from './pages/Practice.jsx'
 import Reading from './pages/Reading.jsx'
+import Convo from './pages/Convo.jsx'
 import Shadowing from './pages/Shadowing.jsx'
 import Vocab from './pages/Vocab.jsx'
 import Notebook from './pages/Notebook.jsx'
@@ -84,6 +85,7 @@ export default function App() {
     case 'vocab': content = <Vocab key={key} params={params} />; break
     case 'notes': content = <Notebook key={key} params={params} />; break
     case 'session': content = <Session go={go} />; break
+    case 'talk': content = <Convo key={key} />; break
     case 'settings': content = <Settings />; break
     default: content = <Personal go={go} />
   }
@@ -108,6 +110,7 @@ export default function App() {
         </div>
         <nav className="main-nav">
           <MainBtn id="home" icon="🏡" label="Cá nhân" tone="t-yellow" on={page === 'home'} />
+          <MainBtn id="talk" icon="💬" label="Giao tiếp" tone="t-green" on={page === 'talk'} />
           <MainBtn id="toeic" icon="🎓" label="TOEIC" tone="t-blue" on={inToeic} />
           <div className={`side-sub ${inToeic ? 'open' : ''}`}>
             {TOEIC_NAV.map((n) => (

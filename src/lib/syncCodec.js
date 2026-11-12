@@ -2,9 +2,9 @@
 // Each top-level part is split into small fields, so two devices editing different things
 // (e.g. to-dos of different days, different notes) never overwrite each other.
 
-export const MAPS = ['activity', 'cards', 'topics', 'listenDone', 'listenProgress', 'curri', 'goalLog', 'qDone', 'reading', 'shadow'] // key → value
+export const MAPS = ['activity', 'cards', 'topics', 'listenDone', 'listenProgress', 'curri', 'goalLog', 'qDone', 'reading', 'shadow', 'convoItems', 'convoDays'] // key → value
 export const LISTS = ['saved', 'notes', 'customLessons', 'reminders'] // arrays of { id, … }
-export const SCALARS = ['profile', 'toeicDay', 'sessionProgress'] // stored whole
+export const SCALARS = ['profile', 'toeicDay', 'sessionProgress', 'convo'] // stored whole
 
 const j = (v) => JSON.stringify(v ?? null)
 const p = (s) => { try { return JSON.parse(s) } catch { return null } }
@@ -83,11 +83,14 @@ export function encode(state) {
 export function decode(doc) {
   const s = {}
   s.todos = Object.fromEntries(Object.entries(doc.todos || {}).map(([d, v]) => [d, decodeDay(v)]))
-  for (const k of MAPS) s[k] = Object.fromEntries(Object.entries(doc[k] || {}).map(([sub, v]) => [sub, p(v)]).filter(([, v]) => v !== null))
+  for (const k of MAPS) if (k in doc) s[k] = Object.fromEntries(Object.entries(doc[k] || {}).map(([sub, v]) => [sub, p(v)]).filter(([, v]) => v !== null))
   for (const k of LISTS) {
     s[k] = sortList(k, Object.values(doc[k] || {}).map(p).filter(Boolean).map(({ _o, ...x }) => x))
   }
-  for (const k of SCALARS) { const v = p(doc[k]); if (v !== null || k !== 'profile') s[k] = v }
+  for (const k of SCALARS) {
+    if (!(k in doc)) continue // not in the cloud yet (e.g. a part added in a newer version): keep the device's
+    const v = p(doc[k]); if (v !== null || k !== 'profile') s[k] = v
+  }
   return s
 }
 
@@ -118,6 +121,9 @@ export function merge(local, cloud) {
   out.shadow = { ...local.shadow, ...cloud.shadow }
   out.qDone = { ...local.qDone, ...cloud.qDone }
   pick('reading', (l, c) => (l.best || 0) > (c.best || 0))
+  pick('convoItems', (l, c) => (l.seen || 0) > (c.seen || 0))
+  pick('convoDays', (l, c) => (l.n || 0) + (l.xp || 0) > (c.n || 0) + (c.xp || 0))
+  if ((local.convo?.xp || 0) > (cloud.convo?.xp || 0) || (local.convo?.placed && !cloud.convo?.placed)) out.convo = local.convo
   out.goalLog = { ...local.goalLog }
   for (const [day, ids] of Object.entries(cloud.goalLog || {})) out.goalLog[day] = [...new Set([...(local.goalLog?.[day] || []), ...ids])]
   for (const k of LISTS) out[k] = sortList(k, unionList(local[k], cloud[k]))

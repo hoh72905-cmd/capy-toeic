@@ -1,6 +1,8 @@
 // Prints every text the app needs as audio (JSON), for scripts/build_audio.py
 import { LESSONS } from '../src/data/listening.js'
 import { FAMILIES, TSL_CARDS } from '../src/data/vocab.js'
+import CONVO from '../src/data/convo.json' with { type: 'json' }
+import { PHRASES } from '../src/data/convoPhrases.js'
 
 // Conversations (Part 2–3) alternate two speakers
 const DIALOGUE = new Set(['l2', 'l3', 'l5', 'l6', 'l7', 'l9', 'l12'])
@@ -31,4 +33,12 @@ for (const f of FAMILIES) {
 // TOEIC Service List words and their example sentences
 for (const c of TSL_CARDS) add(c.w)
 TSL_CARDS.forEach((c, i) => { if (c.ex) add(c.ex[0], i % 2 ? 'us3' : 'ca1') })
+// Conversation: translation answers, reflex dialogue lines (two different voices) and core phrases
+const TALK = ['us1', 'ca1', 'us3', 'uk1', 'us4', 'ca2', 'us2']
+CONVO.tr.forEach(([id, , , en], i) => items.push({ key: `C:t${id}`, text: en[0], voice: TALK[i % TALK.length] }))
+CONVO.rf.forEach(([id, , a, b], i) => {
+  items.push({ key: `C:r${id}:a`, text: a, voice: TALK[i % TALK.length] })
+  items.push({ key: `C:r${id}:b`, text: b, voice: TALK[(i + 3) % TALK.length] })
+})
+PHRASES.forEach((p, i) => items.push({ key: `C:${p.id}`, text: p.en.replace(/…/g, '').replace(/\s+([,.?!])/g, '$1').replace(/;\s*$/, '').trim(), voice: i % 2 ? 'ca1' : 'us1' }))
 process.stdout.write(JSON.stringify(items))

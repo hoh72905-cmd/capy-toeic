@@ -10,6 +10,13 @@ App chia làm 2 khu trên thanh menu:
 - **Nhắc nhở & lưu ý:** ghi lịch thi, deadline, sự kiện, lưu ý; app tự đếm ngược ("Ngày mai", "Còn 5 ngày"), việc gấp (≤ 2 ngày) hiện thanh chuông ở đầu trang. Ngày thi TOEIC tự xuất hiện ở đây.
 - **TOEIC hôm nay:** tóm tắt việc học trong ngày và nút vào học.
 
+### 💬 Giao tiếp (phản xạ nói & nghe, A1 → C2)
+- **Bài kiểm tra đầu vào** (~5 phút): 6 câu nghe & chọn câu đáp + 6 câu dịch Việt → Anh, từ A1 đến C2 → xếp cấp. Có thể tự chọn cấp, làm lại bất kỳ lúc nào.
+- **Nhiệm vụ mỗi ngày** (10–15 phút): 📌 3 mẫu câu (nghe, nhắc lại ×3) → 🔁 ôn câu đến hạn (xen kẽ nghe-chép-lại và dịch lại) → ✍️ 5–10 câu dịch mới → ❓ 2 câu đặt câu hỏi → ⚡ 5 lượt phản xạ (nghe câu nói, chọn câu đáp trong 8 giây rồi nói lại) → 💬 nói nhanh 30–60 giây theo chủ đề, ghi âm.
+- **Chấm bài dịch nhiều đáp án**: so với mọi bản dịch được chấp nhận; coi viết tắt, chính tả Anh–Mỹ, số, từ đồng nghĩa thông dụng là như nhau; báo đúng / gần đúng / chưa đúng, chỉ từ thiếu – thừa; "Câu của mình cũng đúng" để app nhớ thêm cách nói của bạn. Trả lời bằng **gõ hoặc nói** (Chrome/Edge/Safari; app Android dùng bộ nhận giọng nói của máy).
+- **Lặp lại ngắt quãng**: câu đã học quay lại sau 1 → 2 → 4 → 7 → 15 → 30 ngày; mẫu câu hiện ở trang chủ mỗi ngày.
+- **Như chơi game**: 18 chặng (A1·1 → C2·3), XP, chuỗi ngày 🔥 (tối thiểu 5 câu/ngày), thưởng khi đủ tối thiểu và khi xong nhiệm vụ (gấp đôi nếu chính xác ≥ 90%); XP nhân theo độ chính xác gần đây (0,6× – 1,4×) nên càng chính xác càng lên cấp nhanh; câu mới 70% đúng cấp, 20% cấp dưới, 10% cấp trên.
+
 ### 🎓 TOEIC (gom toàn bộ phần học)
 - **Tổng quan:** trạng thái học, việc học hôm nay (tự điền theo lộ trình), mục tiêu, tiến độ tuần, phần cần ôn lại, nút **Bắt đầu buổi học** (~25 phút).
 - **Lộ trình không trùng lặp** (`src/lib/course.js`): toàn bộ từ vựng, câu Part 5, bài Part 6/7, bài nghe chép và bài shadowing được giao **mỗi thứ một lần**, chia đều từ ngày bắt đầu đến 7 ngày trước ngày thi (tuần cuối để làm đề). Thời gian ngắn hoặc mục tiêu cao → mỗi ngày nhiều hơn; điểm hiện tại cao → bỏ qua phần dễ. Việc học hằng ngày chỉ tự đánh dấu xong khi làm đủ số lượng.
@@ -70,8 +77,9 @@ Có Android Studio thì có thể build ngay trên máy: `npm run android:sync` 
 - Khung kiến thức, mốc điểm TOEIC → CEFR và thứ tự bài học: [English Test Prep Data: TOEIC, IELTS, TOEFL](https://www.kaggle.com/datasets/duongduong123/english-test-prep-data-toeic-ielts-toefl) của duongduong123, giấy phép **Open Database License (ODbL)**. File `src/data/curriculum.js` được tạo bằng `python3 scripts/build_curriculum.py <thư mục CSV đã giải nén>`.
 - 1.259 từ TOEIC hay gặp nhất: [TOEIC Service List 1.1](https://www.kaggle.com/datasets/jimregan/toeic-service-list) (Browne & Culligan), giấy phép **CC BY-SA 4.0**. Nghĩa tiếng Việt và từ loại do app bổ sung; file `src/data/tsl.json` chia sẻ theo cùng giấy phép CC BY-SA 4.0.
 - Câu ví dụ cho từ vựng và 42 bài nghe "câu thông dụng": câu Anh–Việt từ [Tatoeba](https://tatoeba.org), giấy phép **CC BY 2.0 FR** (mã câu lưu trong `src/data/examples.json`, `src/data/listenMore.json`). Tạo lại bằng `python3 -I scripts/build_tatoeba.py <thư mục file Tatoeba> <TSL_11_lemmatized_for_teaching.txt>`.
+- Giao tiếp: câu dịch từ [Tatoeba](https://tatoeba.org) (CC BY 2.0 FR, giữ mọi bản dịch tiếng Anh của cùng một câu tiếng Việt làm đáp án); hội thoại phản xạ từ [DailyDialog](http://yanran.li/dailydialog) (Li và cộng sự, 2017, **CC BY-NC-SA 4.0** — chỉ dùng phi thương mại; phần dữ liệu suy ra chia sẻ cùng giấy phép); cấp độ A1–C2 ước lượng theo độ dài câu và tần suất từ của New General Service List (CC BY-SA 4.0). File `src/data/convo.json` tạo bằng `python3 -I scripts/build_conversation.py <thư mục Tatoeba> <DailyDialog train.csv> <thư mục NGSL>`. Mẫu câu giao tiếp và đề nói: tự soạn.
 - Word family, 12 bài nghe kiểu đề, câu hỏi Part 5 và bài đọc Part 6/7: tự soạn cho app (Part 5 sắp theo các bài ngữ pháp của bộ Kaggle ở trên).
-- Âm thanh (2.659 file MP3 trong `public/audio`) tạo sẵn bằng [Piper TTS](https://github.com/rhasspy/piper) với các giọng: LJ Speech (public domain), LibriTTS-R (CC BY 4.0), Hi-Fi TTS "Cori" của NVIDIA (CC BY 4.0), VCTK của Đại học Edinburgh (CC BY 4.0; người đọc giọng Mỹ, Canada, Anh, Úc). Tạo lại bằng `scripts/list_audio.mjs` + `scripts/build_audio.py` (xem đầu file).
+- Âm thanh (5.339 file MP3 trong `public/audio`) tạo sẵn bằng [Piper TTS](https://github.com/rhasspy/piper) với các giọng: LJ Speech (public domain), LibriTTS-R (CC BY 4.0), Hi-Fi TTS "Cori" của NVIDIA (CC BY 4.0), VCTK của Đại học Edinburgh (CC BY 4.0; người đọc giọng Mỹ, Canada, Anh, Úc). Tạo lại bằng `scripts/list_audio.mjs` + `scripts/build_audio.py` (xem đầu file).
 
 ## Ghi chú
 - Dịch tự động dùng MyMemory (miễn phí, khoảng 5.000 ký tự/ngày). 165+ từ trong bộ từ vựng được tra ngay cả khi không có mạng.

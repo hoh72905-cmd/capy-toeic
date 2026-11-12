@@ -11,7 +11,7 @@ import Mascot from '../components/Mascot.jsx'
 const Recognition = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition)
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
-function useRecorder() {
+export function useRecorder() {
   const [rec, setRec] = useState(null) // MediaRecorder while recording
   const [url, setUrl] = useState(null)
   const [err, setErr] = useState('')
