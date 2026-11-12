@@ -3,6 +3,7 @@ import { LESSONS } from '../src/data/listening.js'
 import { FAMILIES, TSL_CARDS } from '../src/data/vocab.js'
 import CONVO from '../src/data/convo.json' with { type: 'json' }
 import { PHRASES } from '../src/data/convoPhrases.js'
+import { ROLEPLAYS } from '../src/data/roleplay.js'
 
 // Conversations (Part 2–3) alternate two speakers
 const DIALOGUE = new Set(['l2', 'l3', 'l5', 'l6', 'l7', 'l9', 'l12'])
@@ -41,4 +42,8 @@ CONVO.rf.forEach(([id, , a, b], i) => {
   items.push({ key: `C:r${id}:b`, text: b, voice: TALK[(i + 3) % TALK.length] })
 })
 PHRASES.forEach((p, i) => items.push({ key: `C:${p.id}`, text: p.en.replace(/…/g, '').replace(/\s+([,.?!])/g, '$1').replace(/;\s*$/, '').trim(), voice: i % 2 ? 'ca1' : 'us1' }))
+// Role-plays: the other person and the learner's model answer in two different voices
+ROLEPLAYS.forEach((r, i) => r.lines.forEach((l) => items.push({
+  key: `C:${r.id}:${l.k}`, text: l.who === 'them' ? l.en : l.en[0], voice: l.who === 'them' ? TALK[i % TALK.length] : TALK[(i + 2) % TALK.length],
+})))
 process.stdout.write(JSON.stringify(items))

@@ -10,7 +10,9 @@ App chia làm 2 khu trên thanh menu:
 - **Nhắc nhở & lưu ý:** ghi lịch thi, deadline, sự kiện, lưu ý; app tự đếm ngược ("Ngày mai", "Còn 5 ngày"), việc gấp (≤ 2 ngày) hiện thanh chuông ở đầu trang. Ngày thi TOEIC tự xuất hiện ở đây.
 - **TOEIC hôm nay:** tóm tắt việc học trong ngày và nút vào học.
 
-### 💬 Giao tiếp (phản xạ nói & nghe, A1 → C2)
+### 💬 Giao tiếp (trang chính — phản xạ nói & nghe, A1 → C2)
+- **Mở app là vào Giao tiếp.**
+- **Hội thoại nhập vai:** 24 tình huống (4 mỗi cấp: quán cà phê, khách sạn, phỏng vấn, khiếu nại, thương lượng, họp hội đồng…). App nói lượt của người kia (có âm thanh, ẩn chữ để luyện nghe từ B1), bạn nói lượt của mình theo gợi ý tiếng Việt, mỗi lượt chấp nhận nhiều cách nói; cuối bài nghe lại cả đoạn. Mỗi ngày 1 hội thoại trong nhiệm vụ; thư viện mở khóa đến cấp hiện tại + 1.
 - **Bài kiểm tra đầu vào** (~5 phút): 6 câu nghe & chọn câu đáp + 6 câu dịch Việt → Anh, từ A1 đến C2 → xếp cấp. Có thể tự chọn cấp, làm lại bất kỳ lúc nào.
 - **Nhiệm vụ mỗi ngày** (10–15 phút): 📌 3 mẫu câu (nghe, nhắc lại ×3) → 🔁 ôn câu đến hạn (xen kẽ nghe-chép-lại và dịch lại) → ✍️ 5–10 câu dịch mới → ❓ 2 câu đặt câu hỏi → ⚡ 5 lượt phản xạ (nghe câu nói, chọn câu đáp trong 8 giây rồi nói lại) → 💬 nói nhanh 30–60 giây theo chủ đề, ghi âm.
 - **Chấm bài dịch nhiều đáp án**: so với mọi bản dịch được chấp nhận; coi viết tắt, chính tả Anh–Mỹ, số, từ đồng nghĩa thông dụng là như nhau; báo đúng / gần đúng / chưa đúng, chỉ từ thiếu – thừa; "Câu của mình cũng đúng" để app nhớ thêm cách nói của bạn. Trả lời bằng **gõ hoặc nói** (Chrome/Edge/Safari; app Android dùng bộ nhận giọng nói của máy).

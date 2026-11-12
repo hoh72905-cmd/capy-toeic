@@ -8,24 +8,27 @@ import { translate } from '../lib/translate.js'
 import { confetti } from '../lib/confetti.js'
 import {
   loadConvo, levelInfo, accuracy, streak, todayPlan, recordAnswer, routineBonus, flagItem, placementItems, placementLevel,
-  setStart, CEFR, CEFR_VI, MIN_PER_DAY, STAGES,
+  setStart, CEFR, CEFR_VI, MIN_PER_DAY, STAGES, roleUnlocked,
 } from '../lib/convo.js'
 import { PHRASES, SPEAK_PROMPTS } from '../data/convoPhrases.js'
+import { ROLEPLAYS } from '../data/roleplay.js'
 import { useRecorder } from './Shadowing.jsx'
 import Mascot from '../components/Mascot.jsx'
 import Speak from '../components/Speak.jsx'
 
 const PHRASE_BY_ID = new Map(PHRASES.map((p) => [p.id, p]))
 const SPEAK_BY_ID = new Map(SPEAK_PROMPTS.map((p) => [p.id, p]))
+const ROLE_BY_ID = new Map(ROLEPLAYS.map((r) => [r.id, r]))
 const STEP_INFO = {
   phrases: { icon: '📌', name: 'Khởi động: mẫu câu', sub: 'Nghe & nói theo 3 mẫu câu (lặp lại mỗi ngày)' },
   review: { icon: '🔁', name: 'Ôn câu cũ', sub: 'Câu đến hạn ôn — nghe hoặc dịch lại' },
   fresh: { icon: '✍️', name: 'Dịch câu mới', sub: 'Việt → Anh, gõ hoặc nói' },
   ask: { icon: '❓', name: 'Đặt câu hỏi', sub: 'Hỏi lại bằng tiếng Anh' },
   reflex: { icon: '⚡', name: 'Phản xạ', sub: 'Nghe câu nói, chọn câu đáp trong 8 giây' },
+  role: { icon: '🎭', name: 'Nhập vai hội thoại', sub: 'Nghe người kia nói, bạn nói lượt của mình' },
   speak: { icon: '💬', name: 'Nói nhanh', sub: 'Nói 30–60 giây theo chủ đề' },
 }
-const ORDER = ['phrases', 'review', 'fresh', 'ask', 'reflex', 'speak']
+const ORDER = ['phrases', 'review', 'role', 'fresh', 'ask', 'reflex', 'speak']
 const shuffle = (a, seed) => { const r = [...a]; let s = seed; for (let i = r.length - 1; i > 0; i--) { s = (s * 9301 + 49297) % 233280; const j = Math.floor((s / 233280) * (i + 1)); [r[i], r[j]] = [r[j], r[i]] } return r }
 const hash = (s) => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 100000, 7)
 const LANG = 'en-US'
@@ -314,6 +317,159 @@ function SpeakStep({ id, onDone, onLevelUp }) {
   )
 }
 
+
+// ---------------------------------------------------------------- role-play
+function RoleplayStep({ id, onDone, onLevelUp, free }) {
+  const rp = ROLE_BY_ID.get(id)
+  const { cefr } = levelInfo()
+  const [idx, setIdx] = useState(0)
+  const [log, setLog] = useState([]) // { k, who, text, vi, result? }
+  const [answer, setAnswer] = useState('')
+  const [result, setResult] = useState(null)
+  const [blur, setBlur] = useState(cefr >= 2)
+  const [shown, setShown] = useState({})
+  const [replaying, setReplaying] = useState(false)
+  const scores = useRef([])
+  const endRef = useRef(null)
+  const line = rp?.lines[idx]
+  const finished = rp && idx >= rp.lines.length
+  const key = (k) => `C:${rp.id}:${k}`
+
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }) }, [log.length, result])
+  // Their lines: show and play, then move on by themselves
+  useEffect(() => {
+    if (!line || line.who !== 'them') return
+    let off = false
+    setLog((l) => [...l, { k: line.k, who: 'them', text: line.en, vi: line.vi }])
+    speak(line.en, { key: key(line.k) }).then(() => setTimeout(() => { if (!off) setIdx((i) => i + 1) }, 350))
+    return () => { off = true }
+  }, [idx]) // eslint-disable-line react-hooks/exhaustive-deps
+  // The end: one review date for the whole dialogue
+  useEffect(() => {
+    if (!finished) return
+    const avg = scores.current.length ? scores.current.reduce((a, b) => a + b, 0) / scores.current.length : 0
+    const r = recordAnswer(rp.id, 'role', avg >= 0.85 ? 'right' : avg >= 0.6 ? 'close' : 'wrong')
+    if (r.levelUp) onLevelUp(r.levelUp)
+    setState((s) => ({ convoItems: { ...s.convoItems, [rp.id]: { ...s.convoItems[rp.id], best: Math.max(s.convoItems[rp.id]?.best || 0, Math.round(avg * 100)) } } }))
+  }, [finished]) // eslint-disable-line react-hooks/exhaustive-deps
+  if (!rp) return null
+
+  const submit = () => {
+    if (result || !answer.trim()) return
+    const g = grade(answer, line.en)
+    setResult(g)
+    scores.current.push(g.verdict === 'right' ? 1 : g.verdict === 'close' ? 0.75 : g.score * 0.5)
+    const r = recordAnswer(`${rp.id}:${line.k}`, 'roleTurn', g.verdict)
+    if (r.levelUp) onLevelUp(r.levelUp)
+    setTimeout(() => speak(g.best, { key: g.best === line.en[0] ? key(line.k) : undefined }), 250)
+  }
+  const accept = () => { scores.current[scores.current.length - 1] = 1; setResult({ ...result, verdict: 'right', score: 1 }) }
+  const nextTurn = () => {
+    stopSpeak()
+    setLog((l) => [...l, { k: line.k, who: 'me', text: answer.trim(), model: result.best, verdict: result.verdict }])
+    setAnswer(''); setResult(null); setIdx((i) => i + 1)
+  }
+  const replay = async () => {
+    setReplaying(true)
+    for (const l of rp.lines) {
+      const r = await speak(l.who === 'them' ? l.en : l.en[0], { key: key(l.k) })
+      if (!r.ok) break
+      await new Promise((ok) => setTimeout(ok, 300))
+    }
+    setReplaying(false)
+  }
+  const restart = () => { stopSpeak(); scores.current = []; setLog([]); setShown({}); setResult(null); setAnswer(''); setIdx(0) }
+  const avg = scores.current.length ? Math.round((scores.current.reduce((a, b) => a + b, 0) / scores.current.length) * 100) : 0
+
+  return (
+    <div className="card step-card role">
+      <div className="row between wrap gap-s">
+        <p className="muted small">{rp.scene} <b>{rp.title}</b> · {CEFR[rp.lv]} · bạn là <b>{rp.me}</b>, app là <b>{rp.them}</b></p>
+        <label className="row gap-s small"><input type="checkbox" style={{ width: 'auto' }} checked={blur} onChange={(e) => setBlur(e.target.checked)} /> Ẩn chữ (luyện nghe)</label>
+      </div>
+      <div className="chat">
+        {log.map((m, i) => m.who === 'them' ? (
+          <div key={i} className="bubble-row them">
+            <span className="avatar">{rp.scene}</span>
+            <div className="bubble" onClick={() => setShown((x) => ({ ...x, [i]: !x[i] }))}>
+              <span className={blur && !shown[i] && !finished ? 'hidden-text' : ''}>{m.text}</span>
+              <button className="icon-btn sm" onClick={(e) => { e.stopPropagation(); speak(m.text, { key: key(m.k) }) }}>🔊</button>
+              {shown[i] && <small className="muted">{m.vi}</small>}
+            </div>
+          </div>
+        ) : (
+          <div key={i} className="bubble-row me">
+            <div className={`bubble ${m.verdict}`}>
+              {m.text}
+              {m.verdict !== 'right' && <small>✔ {m.model}</small>}
+            </div>
+          </div>
+        ))}
+        {line?.who === 'me' && (
+          <div className="my-turn">
+            <p className="prompt-label">🗣️ Lượt của bạn: {line.vi}</p>
+            <AnswerBox value={answer} onChange={setAnswer} onSubmit={result ? nextTurn : submit} disabled={!!result} placeholder="Nói hoặc gõ câu của bạn…" />
+            {!result ? (
+              <div className="row between wrap gap-s">
+                <button className="link small" onClick={() => setAnswer(line.en[0].split(' ').slice(0, 2).join(' ') + ' ')}>💡 Gợi ý</button>
+                <button className="btn yellow" onClick={submit} disabled={!answer.trim()}>Nói ✓</button>
+              </div>
+            ) : (
+              <>
+                <Feedback result={result} answer={answer} refs={line.en} onAccept={accept} />
+                <button className="btn blue wide" onClick={nextTurn}>Tiếp hội thoại ➜</button>
+              </>
+            )}
+          </div>
+        )}
+        <div ref={endRef} />
+      </div>
+      {finished && (
+        <div className="center">
+          <Mascot size={80} mood={avg >= 80 ? 'cheer' : 'think'} />
+          <h2>Xong hội thoại · {avg}%</h2>
+          <p className="muted small">Bài này sẽ quay lại theo lịch ôn. Nghe lại cả đoạn và nói nhẩm theo để nhớ lâu hơn.</p>
+          <div className="row gap-s center-row wrap">
+            <button className="btn blue" onClick={replaying ? stopSpeak : replay}>{replaying ? '⏹ Dừng' : '▶ Nghe lại cả đoạn'}</button>
+            <button className="btn" onClick={restart}>🔁 Luyện lại</button>
+            <button className="btn yellow" onClick={() => { stopSpeak(); onDone() }}>{free ? 'Xong ✓' : 'Tiếp ➜'}</button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function RoleLibrary({ onOpen, onBack }) {
+  const { convoItems, convo } = useStore()
+  const { cefr } = levelInfo(convo)
+  return (
+    <div className="page">
+      <div className="row between"><button className="btn sm" onClick={onBack}>← Nhiệm vụ</button><span className="pill">🎭 {ROLEPLAYS.length} hội thoại</span></div>
+      <h1>🎭 Hội thoại nhập vai</h1>
+      <p className="muted">Mở khóa đến cấp {CEFR[Math.min(5, cefr + 1)]}. Lên cấp để mở thêm hội thoại khó hơn.</p>
+      {CEFR.map((c, lv) => (
+        <div key={c}>
+          <h2 className="section-title">{c} · {CEFR_VI[lv]}</h2>
+          <div className="lesson-grid">
+            {ROLEPLAYS.filter((r) => r.lv === lv).map((r) => {
+              const open = roleUnlocked(r, cefr)
+              const st = convoItems[r.id]
+              return (
+                <button key={r.id} className={`card lesson-card ${open ? '' : 'locked'}`} disabled={!open} onClick={() => onOpen(r.id)}>
+                  <span className="lesson-scene">{open ? r.scene : '🔒'}</span>
+                  <div><b>{r.title}</b><p className="muted small">Bạn: {r.me} · {r.lines.filter((l) => l.who === 'me').length} lượt nói</p>
+                    {st?.best != null && <span className={`pill ${st.best >= 80 ? 'green' : 'pink'}`}>Tốt nhất {st.best}%</span>}</div>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // ---------------------------------------------------------------- placement test
 function Placement({ D, onDone, onSkip }) {
   const { reflex, trans } = useMemo(() => placementItems(D), [D])
@@ -403,7 +559,8 @@ export default function Convo() {
   const store = useStore()
   const { convo, convoDays, convoItems } = store
   const [D, setD] = useState(null)
-  const [view, setView] = useState('home') // home | run | test | choose
+  const [view, setView] = useState('home') // home | run | test | choose | roles | role
+  const [freeRole, setFreeRole] = useState(null)
   const [step, setStep] = useState(null) // the step being run
   const [runAll, setRunAll] = useState(false)
   const [levelUp, setLevelUp] = useState(null)
@@ -412,7 +569,7 @@ export default function Convo() {
   const today = todayKey()
   const plan = convoDays[today]?.plan
   // Today's routine is made once (after the level is known) and kept for the day
-  useEffect(() => { if (D && convo.placed && !plan) todayPlan(D) }, [D, convo.placed, plan])
+  useEffect(() => { if (D && convo.placed && (!plan || !plan.role)) todayPlan(D) }, [D, convo.placed, plan])
   if (!D) return <div className="page center"><Mascot size={90} mood="think" /><p className="muted">Đang tải bài giao tiếp…</p></div>
 
   if (!convo.placed && view === 'home') return (
@@ -430,13 +587,21 @@ export default function Convo() {
   )
   if (view === 'test') return <div className="page"><Placement D={D} onDone={() => setView('home')} onSkip={() => setView('choose')} /></div>
   if (view === 'choose') return <div className="page"><ChooseLevel onDone={() => setView('home')} /></div>
+  if (view === 'roles') return <RoleLibrary onBack={() => setView('home')} onOpen={(id) => { setFreeRole(id); setView('role') }} />
+  if (view === 'role' && freeRole) return (
+    <div className="page talk-run">
+      <button className="btn sm" onClick={() => { stopSpeak(); setView('roles') }}>← Danh sách hội thoại</button>
+      <RoleplayStep key={freeRole} id={freeRole} free onDone={() => setView('roles')} onLevelUp={setLevelUp} />
+      {levelUp && <LevelUp info={levelUp} onClose={() => setLevelUp(null)} />}
+    </div>
+  )
 
   if (!plan) return <div className="page center"><Mascot size={90} mood="think" /><p className="muted">Đang chuẩn bị bài hôm nay…</p></div>
   const day = convoDays[today] || { n: 0, ok: 0, xp: 0, done: {} }
   const lvl = levelInfo(convo)
   const acc = accuracy(convo)
   const st = streak(convoDays)
-  const stepLen = (k) => (k === 'speak' ? 1 : (plan[k] || []).length)
+  const stepLen = (k) => (k === 'speak' ? 1 : k === 'role' ? (plan.role ? 1 : 0) : (plan[k] || []).length)
   const doneKey = (k) => (k === 'phrases' ? 'phrase' : k)
   const stepDone = (k) => Math.min(stepLen(k), (day.done?.[doneKey(k)] || []).length)
   const steps = ORDER.filter((k) => stepLen(k) > 0)
@@ -456,7 +621,7 @@ export default function Convo() {
     if (finished) { const b = routineBonus(); if (b) { setBonus(b); confetti(undefined, undefined, 80) } }
     setView('home'); setStep(null)
   }
-  const remaining = (k) => (k === 'speak' ? [plan.speak] : (plan[k] || []).filter((id) => !(day.done?.[doneKey(k)] || []).includes(id)))
+  const remaining = (k) => (k === 'speak' ? [plan.speak] : k === 'role' ? [plan.role] : (plan[k] || []).filter((id) => !(day.done?.[doneKey(k)] || []).includes(id)))
 
   if (view === 'run' && step) {
     const ids = remaining(step)
@@ -475,6 +640,7 @@ export default function Convo() {
         {(step === 'review' || step === 'fresh' || step === 'ask') && <TranslateStep key={step} ids={ids} kind={step} {...props} />}
         {step === 'reflex' && <ReflexStep key={step} ids={ids} {...props} />}
         {step === 'speak' && <SpeakStep key={step} id={plan.speak} {...props} />}
+        {step === 'role' && <RoleplayStep key={step} id={plan.role} {...props} />}
         {levelUp && <LevelUp info={levelUp} onClose={() => setLevelUp(null)} />}
       </div>
     )
@@ -522,6 +688,12 @@ export default function Convo() {
           ? <button className="btn start-btn" onClick={() => startStep(steps.find((k) => stepDone(k) < stepLen(k)), true)}><span>▶ Luyện tiếp nhiệm vụ hôm nay</span><small>~10–15 phút · thưởng XP khi xong hết</small></button>
           : <p className="celebrate">🎉 Xong nhiệm vụ hôm nay! Mai quay lại để ôn đúng lúc nhé — sự lặp lại là chìa khóa.</p>}
       </section>
+
+      <button className="card role-entry" onClick={() => setView('roles')}>
+        <span className="lesson-scene">🎭</span>
+        <span className="grow"><b>Hội thoại nhập vai</b><small>{ROLEPLAYS.filter((r) => roleUnlocked(r, lvl.cefr)).length}/{ROLEPLAYS.length} hội thoại đã mở · luyện thêm bất cứ lúc nào</small></span>
+        <span className="pill blue">Mở ➜</span>
+      </button>
 
       <div className="grid-2">
         <section className="card tint-blue">

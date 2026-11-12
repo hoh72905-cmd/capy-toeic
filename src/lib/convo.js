@@ -6,6 +6,7 @@ import { getState, setState } from './store.js'
 import { todayKey, addDays, diffDays } from './date.js'
 import { review, isDue } from './srs.js'
 import { PHRASES, SPEAK_PROMPTS } from '../data/convoPhrases.js'
+import { ROLEPLAYS } from '../data/roleplay.js'
 
 export const CEFR = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2']
 export const CEFR_VI = ['Mới bắt đầu', 'Sơ cấp', 'Trung cấp', 'Trung cao cấp', 'Cao cấp', 'Thành thạo']
@@ -69,12 +70,13 @@ export function buildPlan(D, state = getState(), date = todayKey()) {
   const due = Object.entries(items).filter(([id, s]) => !s.bad && isDue(s) && s.added && s.added < date && !id.startsWith('p'))
     .sort((a, b) => (a[1].due || '').localeCompare(b[1].due || '') || (a[1].box || 0) - (b[1].box || 0)).map(([id]) => id)
   const reviewTr = due.filter((id) => id.startsWith('t')).slice(0, 10)
-  const reviewRf = due.filter((id) => id.startsWith('r')).slice(0, 3)
+  const reviewRf = due.filter((id) => /^r\d/.test(id)).slice(0, 3)
   const phraseDue = PHRASES.filter((p) => items[p.id] && isDue(items[p.id]) && p.lv <= cefr + 1).map((p) => p.id)
   const phraseNew = PHRASES.filter((p) => !items[p.id] && p.lv <= cefr).map((p) => p.id)
   const speakPool = SPEAK_PROMPTS.filter((s) => s.lv === cefr)
   const dayNo = Math.max(0, diffDays('2026-01-01', date))
   return {
+    role: pickRole(items, cefr, date),
     review: reviewTr,
     fresh: pickNew(D.tr, items, cefr, per, (x) => !x.q),
     ask: pickNew(D.tr, items, cefr, 2, (x) => x.q),
@@ -84,11 +86,30 @@ export function buildPlan(D, state = getState(), date = todayKey()) {
   }
 }
 
+// Role-play of the day: one that is due for review, else the next new one at (or near) the level
+export function pickRole(items, cefr, date = todayKey()) {
+  const due = ROLEPLAYS.filter((r) => items[r.id] && !items[r.id].bad && isDue(items[r.id]) && items[r.id].added < date && r.lv <= cefr + 1)
+  if (due.length) return due[0].id
+  for (const lv of [cefr, cefr - 1, cefr + 1, cefr - 2]) {
+    const fresh = ROLEPLAYS.find((r) => r.lv === lv && !items[r.id])
+    if (fresh) return fresh.id
+  }
+  const seen = ROLEPLAYS.filter((r) => r.lv <= cefr + 1).sort((a, b) => (items[a.id]?.last || '').localeCompare(items[b.id]?.last || ''))
+  return seen[0]?.id || ROLEPLAYS[0].id
+}
+// Role-plays open up to one level above the learner's
+export const roleUnlocked = (r, cefr) => r.lv <= cefr + 1
+
 // Today's plan, made once and kept (so it is the same after a reload or on another device)
 export function todayPlan(D) {
   const date = todayKey()
   const day = getState().convoDays[date]
-  if (day?.plan) return day.plan
+  if (day?.plan && day.plan.role) return day.plan
+  if (day?.plan) { // made by an older version: add today's role-play
+    const role = pickRole(getState().convoItems, levelInfo().cefr, date)
+    setState((s) => ({ convoDays: { ...s.convoDays, [date]: { ...s.convoDays[date], plan: { ...s.convoDays[date].plan, role } } } }))
+    return { ...day.plan, role }
+  }
   const plan = buildPlan(D)
   setState((s) => ({ convoDays: { ...s.convoDays, [date]: { n: 0, ok: 0, xp: 0, done: {}, ...(s.convoDays[date] || {}), plan } } }))
   return plan
@@ -96,7 +117,8 @@ export function todayPlan(D) {
 
 // ---- recording answers ----
 const VERDICT_GRADE = { right: 2, close: 1, wrong: 0 }
-const BASE_XP = { fresh: 10, ask: 10, review: 6, reflex: 5, phrase: 2, speak: 20 }
+const BASE_XP = { fresh: 10, ask: 10, review: 6, reflex: 5, phrase: 2, speak: 20, roleTurn: 8, role: 15 }
+const NO_SRS = new Set(['speak', 'roleTurn']) // a role-play turn is graded, the whole dialogue gets the review date
 
 /**
  * Record one answer. kind: fresh | ask | review | reflex | phrase | speak. verdict: right | close | wrong.
@@ -109,15 +131,15 @@ export function recordAnswer(id, kind, verdict, { fast = false, alt } = {}) {
   setState((s) => {
     const convo = { ...s.convo }
     const val = verdict === 'right' ? 1 : verdict === 'close' ? 0.6 : 0
-    if (kind !== 'phrase' && kind !== 'speak') convo.recent = [...(convo.recent || []), val].slice(-20)
+    if (kind !== 'phrase' && kind !== 'speak' && kind !== 'role') convo.recent = [...(convo.recent || []), val].slice(-20)
     const mult = 0.6 + 0.8 * accuracy(convo) // 0.6× … 1.4×
-    gained = Math.round((verdict === 'wrong' ? 2 : BASE_XP[kind] * (verdict === 'close' ? 0.7 : 1) + (fast ? 2 : 0)) * (kind === 'phrase' || kind === 'speak' ? 1 : mult))
+    gained = Math.round((verdict === 'wrong' ? 2 : BASE_XP[kind] * (verdict === 'close' ? 0.7 : 1) + (fast ? 2 : 0)) * (kind === 'phrase' || kind === 'speak' || kind === 'role' ? 1 : mult))
     convo.xp = (convo.xp || 0) + gained
     const prev = s.convoItems[id] || { box: 0, added: date }
-    const next = kind === 'speak' ? { ...prev, last: date, seen: (prev.seen || 0) + 1 } : review(prev, VERDICT_GRADE[verdict])
+    const next = NO_SRS.has(kind) ? { ...prev, last: date, seen: (prev.seen || 0) + 1 } : review(prev, VERDICT_GRADE[verdict])
     if (alt) next.alt = [...new Set([...(prev.alt || []), alt])].slice(-3)
     const day = { n: 0, ok: 0, xp: 0, done: {}, ...(s.convoDays[date] || {}) }
-    const counts = kind === 'fresh' || kind === 'ask' || kind === 'review'
+    const counts = kind === 'fresh' || kind === 'ask' || kind === 'review' || kind === 'roleTurn'
     day.n += counts ? 1 : 0
     day.ok += counts && verdict !== 'wrong' ? 1 : 0
     day.xp += gained
@@ -125,7 +147,9 @@ export function recordAnswer(id, kind, verdict, { fast = false, alt } = {}) {
     // Daily bonuses: reaching the minimum, and finishing the whole routine; doubled when accurate
     const acc = day.n ? day.ok / day.n : 0
     if (!day.bonusMin && day.n >= MIN_PER_DAY) { const b = acc >= 0.9 ? 40 : 20; day.bonusMin = b; day.xp += b; convo.xp += b; gained += b }
-    return { convo, convoItems: { ...s.convoItems, [id]: next }, convoDays: { ...s.convoDays, [date]: day } }
+    const itemId = kind === 'roleTurn' ? id.split(':')[0] : id
+    if (kind === 'roleTurn') { const cur = s.convoItems[itemId] || { box: 0, added: date }; return { convo, convoItems: { ...s.convoItems, [itemId]: { ...cur, added: cur.added || date } }, convoDays: { ...s.convoDays, [date]: day } } }
+    return { convo, convoItems: { ...s.convoItems, [itemId]: next }, convoDays: { ...s.convoDays, [date]: day } }
   })
   const after = levelInfo()
   return { xp: gained, levelUp: after.stage > before.stage ? after : null }

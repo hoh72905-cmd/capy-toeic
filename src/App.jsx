@@ -40,7 +40,7 @@ const PREVIEW_HOST = typeof location !== 'undefined' && location.hostname.endsWi
 
 function readHash() {
   const [page, ref] = window.location.hash.replace('#/', '').split('/')
-  return { page: page || 'home', params: ref ? { ref: decodeURIComponent(ref) } : {} }
+  return { page: page || 'talk', params: ref ? { ref: decodeURIComponent(ref) } : {} }
 }
 
 export default function App() {
@@ -104,13 +104,13 @@ export default function App() {
       </div>
 
       <aside className="sidebar">
-        <div className="brand" onClick={() => go('home')}>
+        <div className="brand" onClick={() => go('talk')}>
           <Mascot size={54} className="bob" />
           <div><b>Capy TOEIC</b><small>Cá nhân & học tập</small></div>
         </div>
         <nav className="main-nav">
-          <MainBtn id="home" icon="🏡" label="Cá nhân" tone="t-yellow" on={page === 'home'} />
           <MainBtn id="talk" icon="💬" label="Giao tiếp" tone="t-green" on={page === 'talk'} />
+          <MainBtn id="home" icon="🏡" label="Cá nhân" tone="t-yellow" on={page === 'home'} />
           <MainBtn id="toeic" icon="🎓" label="TOEIC" tone="t-blue" on={inToeic} />
           <div className={`side-sub ${inToeic ? 'open' : ''}`}>
             {TOEIC_NAV.map((n) => (
@@ -128,7 +128,7 @@ export default function App() {
       <div className="main-col">
         <div className="sticky-head">
           <header className="topbar">
-            <div className="brand" onClick={() => go('home')}><Mascot size={38} /><b>Capy TOEIC</b></div>
+            <div className="brand" onClick={() => go('talk')}><Mascot size={38} /><b>Capy TOEIC</b></div>
             <div className="row gap-s">
               <SyncChip onClick={() => go('settings')} />
               <span className="pill streak-pill"><span className="flame">🔥</span> {streak}</span>
