@@ -8,3 +8,4 @@ android/build
 6599da88afbcdd274c76325bd8249887.jpg
 android/keystore/
 firebase-debug.log
+.env*

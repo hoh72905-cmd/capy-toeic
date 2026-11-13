@@ -237,7 +237,7 @@ function Player({ lesson, onBack, onDone }) {
           <div className="video-top"><span>{lesson.part}</span><span>⏱ {fmt(elapsed)} / ~6:00</span></div>
           <div className="video-scene">
             <span className={`scene-emoji ${playing ? 'pulse' : ''}`}>{lesson.scene}</span>
-            <Mascot size={86} mood={playing ? 'happy' : 'calm'} className={playing ? 'talk' : ''} />
+            <Mascot size={86} mood={playing ? 'happy' : 'calm'} className={playing ? 'mascot-talk' : ''} />
           </div>
           <div className="subtitle">
             {checked ? en : playing ? <span className="wave">♪ ♫ ♪ ♫ ♪</span> : 'Nghe và chép lại nhé…'}
