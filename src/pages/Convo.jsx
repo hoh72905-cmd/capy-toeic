@@ -34,8 +34,29 @@ const hash = (s) => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 100000,
 const LANG = 'en-US'
 
 // ---------------------------------------------------------------- shared pieces
+// Enter = go on (next sentence / next turn) while `active`. Listens on window in the capture phase so it
+// also wins over a focused button (no double click), but leaves typing in an open text box alone.
+function useEnter(active, fn, { modal = false } = {}) {
+  const fnRef = useRef(fn)
+  fnRef.current = fn
+  useEffect(() => {
+    if (!active) return
+    const onKey = (e) => {
+      if (e.key !== 'Enter' || e.repeat || e.shiftKey || e.ctrlKey || e.altKey || e.metaKey || e.isComposing) return
+      const t = e.target
+      if ((t?.tagName === 'TEXTAREA' || t?.tagName === 'INPUT') && !t.disabled) return
+      if (!modal && document.querySelector('.modal-back')) return // the level-up box takes Enter first
+      e.preventDefault(); e.stopPropagation()
+      fnRef.current()
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [active, modal])
+}
+
 function LevelUp({ info, onClose }) {
   useEffect(() => { confetti(undefined, undefined, 90) }, [])
+  useEnter(true, onClose, { modal: true })
   return (
     <div className="modal-back" onClick={onClose}>
       <div className="card center levelup" onClick={(e) => e.stopPropagation()}>
@@ -53,7 +74,7 @@ function AnswerBox({ value, onChange, onSubmit, placeholder, disabled }) {
   const [busy, setBusy] = useState(false)
   const [hint, setHint] = useState('')
   const inputRef = useRef(null)
-  useEffect(() => { inputRef.current?.focus() }, [])
+  useEffect(() => { if (!disabled) inputRef.current?.focus() }, [disabled])
   const mic = async () => {
     if (busy) { stopListening(); return }
     setHint(''); setBusy(true); stopSpeak()
@@ -112,7 +133,6 @@ function PhraseStep({ ids: startIds, onDone, onLevelUp }) {
   const [times, setTimes] = useState(0)
   const p = PHRASE_BY_ID.get(ids[i])
   useEffect(() => { if (p) speak(p.en, { key: `C:${p.id}` }); else onDone(); setHeard(null); setTimes(0) }, [i]) // eslint-disable-line react-hooks/exhaustive-deps
-  if (!p) return null
   const repeat = async () => {
     for (let k = 0; k < 3; k++) { const r = await speak(p.en, { key: `C:${p.id}` }); if (!r.ok) break; await new Promise((r2) => setTimeout(r2, 1400)) }
     setTimes((t) => t + 3)
@@ -125,6 +145,8 @@ function PhraseStep({ ids: startIds, onDone, onLevelUp }) {
     if (r.levelUp) onLevelUp(r.levelUp)
     if (i + 1 >= ids.length) onDone(); else setI(i + 1)
   }
+  useEnter(!!p, next)
+  if (!p) return null
   return (
     <div className="card step-card">
       <p className="muted small">Mẫu câu {i + 1}/{ids.length} · {p.tag} · {CEFR[p.lv]}</p>
@@ -136,7 +158,7 @@ function PhraseStep({ ids: startIds, onDone, onLevelUp }) {
       </div>
       {heard?.said && <p className={heard.verdict === 'wrong' ? 'cause small' : 'ok-box small'}>Máy nghe: "{heard.said}" — khớp {Math.round(heard.score * 100)}%</p>}
       {heard?.err && <p className="cause small">{heard.err}</p>}
-      <button className="btn blue wide" onClick={next}>{times ? `Đã nói ${times} lần — tiếp ➜` : 'Tiếp ➜'}</button>
+      <button className="btn blue wide" onClick={next}>{times ? `Đã nói ${times} lần — tiếp ➜` : 'Tiếp ➜'} <kbd>Enter</kbd></button>
     </div>
   )
 }
@@ -158,6 +180,8 @@ function TranslateStep({ ids: startIds, kind, D, onDone, onLevelUp }) {
     if (item && listenMode) setTimeout(() => speak(item.en[0], { key: `C:${item.id}` }), 300)
   }, [i]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (!item) onDone() }, [item]) // eslint-disable-line react-hooks/exhaustive-deps
+  const next = () => { stopSpeak(); if (i + 1 >= list.length) onDone(); else setI(i + 1) }
+  useEnter(!!result && !!item, next)
   if (!item) return null
 
   const submit = () => {
@@ -172,7 +196,6 @@ function TranslateStep({ ids: startIds, kind, D, onDone, onLevelUp }) {
     recordAnswer(item.id, kind, 'right', { alt: answer.trim() })
     setResult({ ...result, verdict: 'right', score: 1 })
   }
-  const next = () => { stopSpeak(); if (i + 1 >= list.length) onDone(); else setI(i + 1) }
 
   return (
     <div className="card step-card">
@@ -201,7 +224,7 @@ function TranslateStep({ ids: startIds, kind, D, onDone, onLevelUp }) {
         <>
           <Feedback result={result} answer={answer} refs={refs} item={listenMode ? null : item} onAccept={listenMode ? null : accept}
             onFlag={() => { flagItem(item.id); next() }} />
-          <button className="btn blue wide" onClick={next}>Tiếp ➜</button>
+          <button className="btn blue wide" onClick={next}>Tiếp ➜ <kbd>Enter</kbd></button>
         </>
       )}
     </div>
@@ -232,6 +255,8 @@ function ReflexStep({ ids: startIds, D, onDone, onLevelUp }) {
     const t = setInterval(() => setLeft(Math.max(0, 8 - Math.floor((Date.now() - started.current) / 1000))), 250)
     return () => clearInterval(t)
   }, [pick, item])
+  const next = () => { stopSpeak(); if (i + 1 >= list.length) onDone(); else setI(i + 1) }
+  useEnter(pick !== null && !!item, next)
   if (!item) return null
   const choose = (o) => {
     if (pick !== null) return
@@ -242,7 +267,6 @@ function ReflexStep({ ids: startIds, D, onDone, onLevelUp }) {
     if (r.levelUp) onLevelUp(r.levelUp)
     setTimeout(() => speak(item.b, { key: `C:${item.id}:b` }), 300)
   }
-  const next = () => { stopSpeak(); if (i + 1 >= list.length) onDone(); else setI(i + 1) }
   return (
     <div className="card step-card">
       <div className="row between"><p className="muted small">⚡ Phản xạ · lượt {i + 1}/{list.length} · {CEFR[item.lv]}</p>
@@ -269,7 +293,7 @@ function ReflexStep({ ids: startIds, D, onDone, onLevelUp }) {
             <button className="link small" onClick={async () => setVi(await translate(`${item.a}\n${item.b}`).catch(() => 'Không dịch được lúc này.'))}>🇻🇳 Xem nghĩa</button>
           </div>
           {vi && <p className="muted small">{vi}</p>}
-          <button className="btn blue wide" onClick={next}>Tiếp ➜</button>
+          <button className="btn blue wide" onClick={next}>Tiếp ➜ <kbd>Enter</kbd></button>
         </>
       )}
     </div>
@@ -288,12 +312,14 @@ function SpeakStep({ id, onDone, onLevelUp }) {
     return () => clearInterval(t)
   }, [mic.recording])
   useEffect(() => { if (!p) onDone() }, [p]) // eslint-disable-line react-hooks/exhaustive-deps
-  if (!p) return null
   const finish = () => {
+    mic.stop()
     const r = recordAnswer(p.id, 'speak', 'right')
     if (r.levelUp) onLevelUp(r.levelUp)
     onDone()
   }
+  useEnter(!!p, finish)
+  if (!p) return null
   return (
     <div className="card step-card">
       <p className="muted small">💬 Nói nhanh · {CEFR[p.lv]}</p>
@@ -312,7 +338,7 @@ function SpeakStep({ id, onDone, onLevelUp }) {
           <label key={c} className="row gap-s small"><input type="checkbox" style={{ width: 'auto' }} checked={checks[k]} onChange={() => setChecks((x) => x.map((v, j) => (j === k ? !v : v)))} /> {c}</label>
         ))}
       </div>
-      <button className="btn blue wide" onClick={finish}>Xong phần nói ✓</button>
+      <button className="btn blue wide" onClick={finish}>Xong phần nói ✓ <kbd>Enter</kbd></button>
     </div>
   )
 }
@@ -352,6 +378,13 @@ function RoleplayStep({ id, onDone, onLevelUp, free }) {
     if (r.levelUp) onLevelUp(r.levelUp)
     setState((s) => ({ convoItems: { ...s.convoItems, [rp.id]: { ...s.convoItems[rp.id], best: Math.max(s.convoItems[rp.id]?.best || 0, Math.round(avg * 100)) } } }))
   }, [finished]) // eslint-disable-line react-hooks/exhaustive-deps
+  const nextTurn = () => {
+    stopSpeak()
+    setLog((l) => [...l, { k: line.k, who: 'me', text: answer.trim(), model: result.best, verdict: result.verdict }])
+    setAnswer(''); setResult(null); setIdx((i) => i + 1)
+  }
+  const leave = () => { stopSpeak(); onDone() }
+  useEnter(!!rp && (finished || (!!result && line?.who === 'me')), finished ? leave : nextTurn)
   if (!rp) return null
 
   const submit = () => {
@@ -364,11 +397,6 @@ function RoleplayStep({ id, onDone, onLevelUp, free }) {
     setTimeout(() => speak(g.best, { key: g.best === line.en[0] ? key(line.k) : undefined }), 250)
   }
   const accept = () => { scores.current[scores.current.length - 1] = 1; setResult({ ...result, verdict: 'right', score: 1 }) }
-  const nextTurn = () => {
-    stopSpeak()
-    setLog((l) => [...l, { k: line.k, who: 'me', text: answer.trim(), model: result.best, verdict: result.verdict }])
-    setAnswer(''); setResult(null); setIdx((i) => i + 1)
-  }
   const replay = async () => {
     setReplaying(true)
     for (const l of rp.lines) {
@@ -417,7 +445,7 @@ function RoleplayStep({ id, onDone, onLevelUp, free }) {
             ) : (
               <>
                 <Feedback result={result} answer={answer} refs={line.en} onAccept={accept} />
-                <button className="btn blue wide" onClick={nextTurn}>Tiếp hội thoại ➜</button>
+                <button className="btn blue wide" onClick={nextTurn}>Tiếp hội thoại ➜ <kbd>Enter</kbd></button>
               </>
             )}
           </div>
@@ -432,7 +460,7 @@ function RoleplayStep({ id, onDone, onLevelUp, free }) {
           <div className="row gap-s center-row wrap">
             <button className="btn blue" onClick={replaying ? stopSpeak : replay}>{replaying ? '⏹ Dừng' : '▶ Nghe lại cả đoạn'}</button>
             <button className="btn" onClick={restart}>🔁 Luyện lại</button>
-            <button className="btn yellow" onClick={() => { stopSpeak(); onDone() }}>{free ? 'Xong ✓' : 'Tiếp ➜'}</button>
+            <button className="btn yellow" onClick={leave}>{free ? 'Xong ✓' : 'Tiếp ➜'} <kbd>Enter</kbd></button>
           </div>
         </div>
       )}
@@ -479,6 +507,8 @@ function Placement({ D, onDone, onSkip }) {
   const [answer, setAnswer] = useState('')
   const [pick, setPick] = useState(null)
   const add = (lv, v) => setPoints((p) => ({ ...p, [lv]: (p[lv] || 0) + v }))
+  const nextRef = useRef(null)
+  useEnter(!!pick && (phase === 'reflex' || phase === 'trans'), () => nextRef.current?.())
   const total = reflex.length + trans.length
   const done = phase === 'reflex' ? i : phase === 'trans' ? reflex.length + i : 0
   useEffect(() => { if (phase === 'reflex' && reflex[i]) speak(reflex[i].a, { key: `C:${reflex[i].id}:a` }) }, [phase, i]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -512,13 +542,14 @@ function Placement({ D, onDone, onSkip }) {
     const opts = shuffle([it.b, ...it.wrong], hash(it.id))
     const choose = (o) => { if (pick) return; setPick(o); if (o === it.b) add(it.lv, 1) }
     const next = () => { setPick(null); if (i + 1 >= reflex.length) { setPhase('trans'); setI(0) } else setI(i + 1) }
+    nextRef.current = next
     return (
       <div className="card step-card">{head}
         <p className="muted small">Phần 1 · Nghe & phản xạ · câu {i + 1}/{reflex.length}</p>
         <div className="reflex-line"><button className="btn blue" onClick={() => speak(it.a, { key: `C:${it.id}:a` })}>▶ Nghe</button><span className={pick ? '' : 'hidden-text'}>{it.a}</span></div>
         <p className="prompt-label">Câu đáp tự nhiên nhất:</p>
         <div className="options">{opts.map((o) => <button key={o} className={`option ${pick ? (o === it.b ? 'right' : o === pick ? 'wrong' : 'dim') : ''}`} onClick={() => choose(o)}>{o}</button>)}</div>
-        {pick && <button className="btn blue wide" onClick={next}>Tiếp ➜</button>}
+        {pick && <button className="btn blue wide" onClick={next}>Tiếp ➜ <kbd>Enter</kbd></button>}
       </div>
     )
   }
@@ -526,6 +557,7 @@ function Placement({ D, onDone, onSkip }) {
   const g = pick
   const check = () => { if (g || !answer.trim()) return; const r = grade(answer, it.en); setPick(r); add(it.lv, r.verdict === 'right' ? 1 : r.verdict === 'close' ? 0.6 : 0) }
   const next = () => { setPick(null); setAnswer(''); if (i + 1 >= trans.length) setPhase('result'); else setI(i + 1) }
+  nextRef.current = next
   return (
     <div className="card step-card">{head}
       <p className="muted small">Phần 2 · Dịch Việt → Anh · câu {i + 1}/{trans.length}</p>
@@ -534,7 +566,7 @@ function Placement({ D, onDone, onSkip }) {
       {!g ? (
         <div className="row between"><button className="link small" onClick={() => { setPick({ verdict: 'wrong', score: 0, best: it.en[0], missing: [], extra: [] }) }}>Mình chưa dịch được →</button>
           <button className="btn yellow" onClick={check} disabled={!answer.trim()}>Kiểm tra ✓</button></div>
-      ) : <><Feedback result={g} answer={answer} refs={it.en} /><button className="btn blue wide" onClick={next}>Tiếp ➜</button></>}
+      ) : <><Feedback result={g} answer={answer} refs={it.en} /><button className="btn blue wide" onClick={next}>Tiếp ➜ <kbd>Enter</kbd></button></>}
     </div>
   )
 }
