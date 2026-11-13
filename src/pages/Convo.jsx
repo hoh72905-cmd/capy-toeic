@@ -10,11 +10,18 @@ import {
   loadConvo, levelInfo, accuracy, streak, todayPlan, recordAnswer, routineBonus, flagItem, placementItems, placementLevel,
   setStart, CEFR, CEFR_VI, MIN_PER_DAY, STAGES, roleUnlocked,
 } from '../lib/convo.js'
+import { convoStats } from '../lib/convoStats.js'
 import { PHRASES, SPEAK_PROMPTS } from '../data/convoPhrases.js'
 import { ROLEPLAYS } from '../data/roleplay.js'
 import { useRecorder } from './Shadowing.jsx'
 import Mascot from '../components/Mascot.jsx'
 import Speak from '../components/Speak.jsx'
+import { useEnter, LevelUp, AnswerBox, Feedback, shuffle, hash, LANG } from '../components/ConvoKit.jsx'
+import { Ring, Sparkline } from '../components/Charts.jsx'
+import { EXPLAIN_BY_ID } from '../data/explain.js'
+import { gradeExplain, framesFor, KIND_NAME } from '../lib/explain.js'
+import ConvoStats from './ConvoStats.jsx'
+import ConvoSprint from './ConvoSprint.jsx'
 
 const PHRASE_BY_ID = new Map(PHRASES.map((p) => [p.id, p]))
 const SPEAK_BY_ID = new Map(SPEAK_PROMPTS.map((p) => [p.id, p]))
@@ -27,104 +34,16 @@ const STEP_INFO = {
   reflex: { icon: '⚡', name: 'Phản xạ', sub: 'Nghe câu nói, chọn câu đáp trong 8 giây' },
   role: { icon: '🎭', name: 'Nhập vai hội thoại', sub: 'Nghe người kia nói, bạn nói lượt của mình' },
   speak: { icon: '💬', name: 'Nói nhanh', sub: 'Nói 30–60 giây theo chủ đề' },
+  explain: { icon: '🧩', name: 'Diễn đạt ý', sub: 'Nói/viết vài câu bằng lời của bạn, app chấm đủ ý' },
 }
-const ORDER = ['phrases', 'review', 'role', 'fresh', 'ask', 'reflex', 'speak']
-const shuffle = (a, seed) => { const r = [...a]; let s = seed; for (let i = r.length - 1; i > 0; i--) { s = (s * 9301 + 49297) % 233280; const j = Math.floor((s / 233280) * (i + 1)); [r[i], r[j]] = [r[j], r[i]] } return r }
-const hash = (s) => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 100000, 7)
-const LANG = 'en-US'
-
-// ---------------------------------------------------------------- shared pieces
-// Enter = go on (next sentence / next turn) while `active`. Listens on window in the capture phase so it
-// also wins over a focused button (no double click), but leaves typing in an open text box alone.
-function useEnter(active, fn, { modal = false } = {}) {
-  const fnRef = useRef(fn)
-  fnRef.current = fn
-  useEffect(() => {
-    if (!active) return
-    const onKey = (e) => {
-      if (e.key !== 'Enter' || e.repeat || e.shiftKey || e.ctrlKey || e.altKey || e.metaKey || e.isComposing) return
-      const t = e.target
-      if ((t?.tagName === 'TEXTAREA' || t?.tagName === 'INPUT') && !t.disabled) return
-      if (!modal && document.querySelector('.modal-back')) return // the level-up box takes Enter first
-      e.preventDefault(); e.stopPropagation()
-      fnRef.current()
-    }
-    window.addEventListener('keydown', onKey, true)
-    return () => window.removeEventListener('keydown', onKey, true)
-  }, [active, modal])
+const ORDER = ['phrases', 'review', 'role', 'fresh', 'ask', 'reflex', 'explain', 'speak']
+// Personal average time to pick a reflex reply over the last 7 days (ms), or null
+function myReflexMs() {
+  const days = getState().convoDays
+  let sum = 0, n = 0
+  for (let k = 0; k < 7; k++) { const p = days[addDays(todayKey(), -k)]?.rt; if (p) { sum += p[0]; n += p[1] } }
+  return n >= 5 ? sum / n : null
 }
-
-function LevelUp({ info, onClose }) {
-  useEffect(() => { confetti(undefined, undefined, 90) }, [])
-  useEnter(true, onClose, { modal: true })
-  return (
-    <div className="modal-back" onClick={onClose}>
-      <div className="card center levelup" onClick={(e) => e.stopPropagation()}>
-        <Mascot size={110} mood="cheer" className="bob" />
-        <h2>🎉 Lên cấp {info.name}!</h2>
-        <p>{info.sub === 1 ? `Chào mừng đến trình độ ${CEFR[info.cefr]} — ${CEFR_VI[info.cefr]}. Câu mới sẽ khó hơn một chút.` : 'Bạn đang tiến bộ rõ rệt. Giữ nhịp mỗi ngày nhé!'}</p>
-        <button className="btn yellow" onClick={onClose}>Tiếp tục ➜</button>
-      </div>
-    </div>
-  )
-}
-
-// Text box + microphone: type or say the answer
-function AnswerBox({ value, onChange, onSubmit, placeholder, disabled }) {
-  const [busy, setBusy] = useState(false)
-  const [hint, setHint] = useState('')
-  const inputRef = useRef(null)
-  useEffect(() => { if (!disabled) inputRef.current?.focus() }, [disabled])
-  const mic = async () => {
-    if (busy) { stopListening(); return }
-    setHint(''); setBusy(true); stopSpeak()
-    try {
-      const said = await listenOnce(LANG)
-      if (said) onChange(said); else setHint('Không nghe thấy gì — thử nói lại nhé.')
-    } catch (e) { setHint(voiceHint(e.code)) }
-    setBusy(false)
-  }
-  return (
-    <div className="answer-box">
-      <div className="row gap-s">
-        <textarea ref={inputRef} rows={2} value={value} disabled={disabled} placeholder={placeholder} autoCapitalize="sentences" spellCheck={false}
-          onChange={(e) => onChange(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSubmit() } }} />
-        {(canListen() || needsAppUpdate()) && (
-          <button type="button" className={`btn mic ${busy ? 'pink rec' : ''}`} onClick={mic} disabled={disabled} title="Nói câu trả lời">{busy ? '⏺' : '🎙️'}</button>
-        )}
-      </div>
-      {hint && <p className="cause small">{hint}</p>}
-    </div>
-  )
-}
-
-// What the grader thinks, with the accepted ways of saying it
-function Feedback({ result, answer, refs, item, onAccept, onFlag }) {
-  const colors = { right: 'fb-right', close: 'fb-close', wrong: 'fb-wrong' }
-  const title = { right: '✅ Chính xác!', close: '👍 Gần đúng', wrong: '❌ Chưa đúng' }[result.verdict]
-  const miss = new Set(result.missing)
-  const extra = new Set(result.extra)
-  const others = refs.filter((r) => r !== result.best)
-  return (
-    <div className={`feedback ${colors[result.verdict]}`}>
-      <b>{title}</b> <span className="muted small">khớp {Math.round(result.score * 100)}%</span>
-      {answer && result.verdict !== 'right' && (
-        <p className="small">Bạn: {answer.split(/\s+/).map((w, i) => <span key={i} className={extra.has(w.toLowerCase().replace(/[^a-z0-9']/g, '')) ? 'w-miss' : ''}>{w} </span>)}</p>
-      )}
-      <p className="best">
-        <Speak text={result.best} small /> {result.best.split(/\s+/).map((w, i) => <span key={i} className={miss.has(w.toLowerCase().replace(/[^a-z0-9']/g, '')) ? 'w-need' : ''}>{w} </span>)}
-      </p>
-      {others.length > 0 && <p className="small muted">Cách nói khác: {others.slice(0, 3).map((o) => <span key={o} className="alt-ans">{o}</span>)}</p>}
-      {item?.vi && <p className="small muted">🇻🇳 {item.vi}</p>}
-      <div className="row gap-s wrap">
-        {result.verdict !== 'right' && onAccept && <button className="btn sm" onClick={onAccept}>✋ Câu của mình cũng đúng</button>}
-        {onFlag && <button className="link small" onClick={onFlag}>⚑ Báo câu lỗi</button>}
-      </div>
-    </div>
-  )
-}
-
 // ---------------------------------------------------------------- steps
 function PhraseStep({ ids: startIds, onDone, onLevelUp }) {
   const [ids] = useState(startIds) // fixed for this run, even when items are marked done
@@ -175,8 +94,10 @@ function TranslateStep({ ids: startIds, kind, D, onDone, onLevelUp }) {
   const refs = item ? [...item.en, ...alt] : []
   // Reviews alternate: hear the English and say/type it back (listening), or translate again
   const listenMode = kind === 'review' && i % 2 === 0
+  const shownAt = useRef(Date.now())
+  const [ms, setMs] = useState(0)
   useEffect(() => {
-    setAnswer(''); setResult(null)
+    setAnswer(''); setResult(null); shownAt.current = Date.now()
     if (item && listenMode) setTimeout(() => speak(item.en[0], { key: `C:${item.id}` }), 300)
   }, [i]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (!item) onDone() }, [item]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -188,7 +109,9 @@ function TranslateStep({ ids: startIds, kind, D, onDone, onLevelUp }) {
     if (result || !answer.trim()) return
     const g = grade(answer, listenMode ? [item.en[0], ...item.en.slice(1)] : refs)
     setResult(g)
-    const r = recordAnswer(item.id, kind, g.verdict)
+    const took = Date.now() - shownAt.current
+    setMs(took)
+    const r = recordAnswer(item.id, kind, g.verdict, { ms: took, skill: listenMode ? 'listen' : undefined })
     if (r.levelUp) onLevelUp(r.levelUp)
     setTimeout(() => speak(g.best, { key: g.best === item.en[0] ? `C:${item.id}` : undefined }), 250) // always hear the right sentence
   }
@@ -224,6 +147,7 @@ function TranslateStep({ ids: startIds, kind, D, onDone, onLevelUp }) {
         <>
           <Feedback result={result} answer={answer} refs={refs} item={listenMode ? null : item} onAccept={listenMode ? null : accept}
             onFlag={() => { flagItem(item.id); next() }} />
+          {!listenMode && ms > 0 && result.verdict !== 'wrong' && <p className="small muted think-time">⏱ Bạn nghĩ và trả lời trong <b>{(ms / 1000).toFixed(1)} giây</b>{ms < 8000 ? ' — phản xạ tốt!' : ' — lần ôn sau thử nói nhanh hơn nhé.'}</p>}
           <button className="btn blue wide" onClick={next}>Tiếp ➜ <kbd>Enter</kbd></button>
         </>
       )}
@@ -238,7 +162,12 @@ function ReflexStep({ ids: startIds, D, onDone, onLevelUp }) {
   const { cefr } = levelInfo()
   const [i, setI] = useState(0)
   const [pick, setPick] = useState(null)
-  const [left, setLeft] = useState(8)
+  // Time limit follows your own speed: 1.5 × your average, between 4 and 8 seconds
+  const [limit] = useState(() => { const m = myReflexMs(); return m ? Math.max(4, Math.min(8, Math.round((m * 1.5) / 1000))) : 8 })
+  const [avgMs] = useState(myReflexMs)
+  const [left, setLeft] = useState(limit)
+  const [took, setTook] = useState(0)
+  const [said, setSaid] = useState(null)
   const [showText, setShowText] = useState(cefr <= 1)
   const [vi, setVi] = useState('')
   const started = useRef(0)
@@ -246,13 +175,13 @@ function ReflexStep({ ids: startIds, D, onDone, onLevelUp }) {
   const options = useMemo(() => (item ? shuffle([item.b, ...item.wrong], hash(item.id)) : []), [item])
   useEffect(() => {
     if (!item) { onDone(); return }
-    setPick(null); setLeft(8); setVi('')
+    setPick(null); setLeft(limit); setVi(''); setSaid(null); setTook(0)
     speak(item.a, { key: `C:${item.id}:a` }).then(() => { started.current = Date.now() })
     started.current = Date.now() + 99999
   }, [i]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (pick !== null || !item) return
-    const t = setInterval(() => setLeft(Math.max(0, 8 - Math.floor((Date.now() - started.current) / 1000))), 250)
+    const t = setInterval(() => setLeft(Math.max(0, limit - Math.floor((Date.now() - started.current) / 1000))), 250)
     return () => clearInterval(t)
   }, [pick, item])
   const next = () => { stopSpeak(); if (i + 1 >= list.length) onDone(); else setI(i + 1) }
@@ -262,8 +191,10 @@ function ReflexStep({ ids: startIds, D, onDone, onLevelUp }) {
     if (pick !== null) return
     setPick(o)
     const ok = o === item.b
-    const fast = Date.now() - started.current < 5000
-    const r = recordAnswer(item.id, 'reflex', ok ? 'right' : 'wrong', { fast: ok && fast })
+    const ms = Math.max(0, Date.now() - started.current)
+    setTook(ms)
+    const fast = ms < Math.min(5000, avgMs || 5000) // quicker than your usual = bonus
+    const r = recordAnswer(item.id, 'reflex', ok ? 'right' : 'wrong', { fast: ok && fast, ms })
     if (r.levelUp) onLevelUp(r.levelUp)
     setTimeout(() => speak(item.b, { key: `C:${item.id}:b` }), 300)
   }
@@ -287,14 +218,99 @@ function ReflexStep({ ids: startIds, D, onDone, onLevelUp }) {
       </div>
       {pick !== null && (
         <>
-          <p className={pick === item.b ? 'ok-box small' : 'cause small'}>{pick === item.b ? '✅ Tự nhiên!' : '❌ Câu đáp hợp nhất là câu màu xanh.'} Nghe và <b>nói lại câu đáp</b> 2–3 lần cho quen miệng.</p>
+          <p className={pick === item.b ? 'ok-box small' : 'cause small'}>{pick === item.b ? `✅ Tự nhiên! ⏱ ${(took / 1000).toFixed(1)}s${avgMs ? (took < avgMs ? ` — nhanh hơn mức trung bình ${(avgMs / 1000).toFixed(1)}s của bạn ⚡` : ` (trung bình của bạn ${(avgMs / 1000).toFixed(1)}s)`) : ''}.` : '❌ Câu đáp hợp nhất là câu màu xanh.'} Nghe và <b>nói lại câu đáp</b> 2–3 lần cho quen miệng.</p>
           <div className="row gap-s wrap">
             <button className="btn" onClick={() => speak(item.b, { key: `C:${item.id}:b` })}>🔁 Nghe câu đáp</button>
+            {canListen() && <button className="btn" onClick={async () => { try { const t = await listenOnce(LANG); setSaid(t ? { t, g: grade(t, [item.b]) } : { t: '', g: null }) } catch (e) { setSaid({ err: voiceHint(e.code) }) } }}>🎙️ Nói lại câu đáp</button>}
             <button className="link small" onClick={async () => setVi(await translate(`${item.a}\n${item.b}`).catch(() => 'Không dịch được lúc này.'))}>🇻🇳 Xem nghĩa</button>
           </div>
           {vi && <p className="muted small">{vi}</p>}
+          {said && <p className={said.g && said.g.verdict !== 'wrong' ? 'ok-box small' : 'cause small'}>{said.err || (said.g ? `Máy nghe: "${said.t}" — khớp ${Math.round(said.g.score * 100)}%${said.g.verdict === 'right' ? ' 👏' : ''}` : 'Không nghe thấy gì — thử lại nhé.')}</p>}
           <button className="btn blue wide" onClick={next}>Tiếp ➜ <kbd>Enter</kbd></button>
         </>
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------- explain in your own words
+function ExplainStep({ id, onDone, onLevelUp }) {
+  const p = EXPLAIN_BY_ID.get(id)
+  const [answer, setAnswer] = useState('')
+  const [tries, setTries] = useState([]) // graded attempts: { answer, g }
+  const [editing, setEditing] = useState(true)
+  const live = useMemo(() => (p ? gradeExplain(answer, p) : null), [answer, p])
+  const last = tries[tries.length - 1]
+  const best = tries.reduce((a, t) => (!a || t.g.score > a.g.score ? t : a), null)
+  useEffect(() => { if (!p) onDone() }, [p]) // eslint-disable-line react-hooks/exhaustive-deps
+  const finish = () => {
+    stopSpeak()
+    if (best) {
+      const r = recordAnswer(p.id, 'explain', best.g.verdict, { score: best.g.score })
+      if (r.levelUp) onLevelUp(r.levelUp)
+    }
+    onDone()
+  }
+  useEnter(!!p && !editing, finish)
+  if (!p) return null
+  const submit = () => {
+    if (!editing || !answer.trim()) return
+    const g = gradeExplain(answer, p)
+    setTries((t) => [...t, { answer, g }])
+    setEditing(false)
+    setTimeout(() => speak(p.model, {}), 400)
+  }
+  const addFrame = (f) => setAnswer((a) => `${a}${a && !/\s$/.test(a) ? ' ' : ''}${f.replace(/…/g, '').trim()} `)
+  const g = editing ? live : last.g
+  const title = { right: '🌟 Diễn đạt rõ ràng!', close: '👍 Khá tốt — thêm chút nữa', wrong: '💪 Chưa đủ ý' }[g.verdict]
+  return (
+    <div className="card step-card explain">
+      <p className="muted small">🧩 Diễn đạt ý · {CEFR[p.lv]} · {KIND_NAME[p.kind]}{tries.length > 0 ? ` · lần ${tries.length + (editing ? 1 : 0)}` : ''}</p>
+      <h2 className="vi-prompt">{p.vi}</h2>
+      {p.ban && <p className="small ban-word">🚫 Không được nói từ <b>{p.ban.split('|')[0].replace(/(\w+)$/, '$1…')}</b> — hãy mô tả nó.</p>}
+      <div className="idea-chips" aria-label="Các ý cần có">
+        <span className="muted small">Ý cần có:</span>
+        {g.ideas.map((it) => <span key={it.label} className={`idea ${it.ok ? 'ok' : ''}`}>{it.ok ? '✓' : '○'} {it.label}</span>)}
+      </div>
+      {editing && (
+        <div className="frames">
+          <span className="muted small">Mẫu mở đầu (chạm để chèn):</span>
+          {framesFor(p).map((f) => <button key={f} type="button" className="frame" onClick={() => addFrame(f)}>{f}</button>)}
+        </div>
+      )}
+      <AnswerBox rows={4} value={answer} onChange={setAnswer} onSubmit={submit} disabled={!editing} placeholder="Nói 🎙️ hoặc gõ bằng tiếng Anh, theo cách của bạn…" />
+      <div className="explain-meters">
+        <span className={g.words >= g.target ? 'ok' : ''}>📝 {g.words}/{g.target} từ</span>
+        <span className={g.links.length >= g.need ? 'ok' : ''}>🔗 {g.links.length}/{g.need} từ nối{g.links.length ? `: ${g.links.slice(0, 4).join(', ')}` : ''}</span>
+        <span className={g.ideas.every((i) => i.ok) ? 'ok' : ''}>💡 {g.ideas.filter((i) => i.ok).length}/{g.ideas.length} ý</span>
+      </div>
+      {editing ? (
+        <div className="row between wrap gap-s">
+          <button className="link small" onClick={() => setAnswer(p.model.split(/(?<=[.!?])\s/)[0] + ' ')}>💡 Xem câu mở đầu mẫu</button>
+          <button className="btn yellow" onClick={submit} disabled={!answer.trim()}>Kiểm tra ✓</button>
+        </div>
+      ) : (
+        <div className={`feedback explain-fb fb-${g.verdict}`}>
+          <div className="row gap-s">
+            <Ring pct={g.score} size={64} stroke={7}><b>{Math.round(g.score * 100)}</b></Ring>
+            <div className="grow">
+              <b>{title}</b>
+              {g.vi && <p className="small">Hãy trả lời bằng <b>tiếng Anh</b> nhé.</p>}
+              {g.banned && <p className="small">Bạn đã dùng thẳng từ bị cấm — thử giải thích mà không dùng nó.</p>}
+              {!g.vi && g.ideas.some((i) => !i.ok) && <p className="small">Còn thiếu: {g.ideas.filter((i) => !i.ok).map((i) => i.label).join(', ')}.</p>}
+              {!g.vi && g.links.length < g.need && <p className="small">Nối các ý bằng <i>because, so, but, however…</i> để câu mạch lạc hơn.</p>}
+              {tries.length > 1 && <p className="small">Lần 1: {Math.round(tries[0].g.score * 100)} → lần {tries.length}: {Math.round(g.score * 100)} {g.score > tries[0].g.score ? '📈' : ''}</p>}
+            </div>
+          </div>
+          <p className="best"><Speak text={p.model} small /> <b>Câu mẫu:</b> {p.model}</p>
+          <p className="small muted">Câu mẫu chỉ là một cách nói — câu của bạn khác vẫn được, miễn đủ ý. Đọc to câu mẫu một lần để học cách nối ý.</p>
+        </div>
+      )}
+      {!editing && (
+        <div className="row gap-s wrap">
+          {tries.length < 3 && g.verdict !== 'right' && <button className="btn" onClick={() => setEditing(true)}>✍️ Nói lại hay hơn</button>}
+          <button className="btn blue grow" onClick={finish}>Tiếp ➜ <kbd>Enter</kbd></button>
+        </div>
       )}
     </div>
   )
@@ -597,6 +613,7 @@ export default function Convo() {
   const [runAll, setRunAll] = useState(false)
   const [levelUp, setLevelUp] = useState(null)
   const [bonus, setBonus] = useState(0)
+  const [weak, setWeak] = useState(null) // sentence ids picked from the statistics page
   useEffect(() => { loadConvo().then(setD) }, [])
   const today = todayKey()
   const plan = convoDays[today]?.plan
@@ -628,14 +645,26 @@ export default function Convo() {
     </div>
   )
 
+  if (view === 'stats') return <ConvoStats D={D} onBack={() => setView('home')} onPractice={(ids) => { setWeak(ids); setView('weak') }} />
+  if (view === 'sprint') return <><ConvoSprint D={D} onBack={() => setView('home')} onLevelUp={setLevelUp} />{levelUp && <LevelUp info={levelUp} onClose={() => setLevelUp(null)} />}</>
+  if (view === 'weak' && weak) return (
+    <div className="page talk-run">
+      <button className="btn sm" onClick={() => { stopSpeak(); setView('stats') }}>← Thống kê</button>
+      <TranslateStep key={weak.join()} ids={weak} kind="review" D={D} onDone={() => setView('stats')} onLevelUp={setLevelUp} />
+      {levelUp && <LevelUp info={levelUp} onClose={() => setLevelUp(null)} />}
+    </div>
+  )
   if (!plan) return <div className="page center"><Mascot size={90} mood="think" /><p className="muted">Đang chuẩn bị bài hôm nay…</p></div>
   const day = convoDays[today] || { n: 0, ok: 0, xp: 0, done: {} }
   const lvl = levelInfo(convo)
   const acc = accuracy(convo)
   const st = streak(convoDays)
-  const stepLen = (k) => (k === 'speak' ? 1 : k === 'role' ? (plan.role ? 1 : 0) : (plan[k] || []).length)
+  // Items of each step in today's plan (old plans have a speaking prompt instead of "Diễn đạt ý")
+  const planIds = (k) => (k === 'speak' ? (plan.explain || !plan.speak ? [] : [plan.speak]) : k === 'role' || k === 'explain' ? (plan[k] ? [plan[k]] : []) : plan[k] || [])
+  const stepLen = (k) => planIds(k).length
   const doneKey = (k) => (k === 'phrases' ? 'phrase' : k)
-  const stepDone = (k) => Math.min(stepLen(k), (day.done?.[doneKey(k)] || []).length)
+  const doneIn = (d, k) => planIds(k).filter((id) => (d.done?.[doneKey(k)] || []).includes(id)).length
+  const stepDone = (k) => doneIn(day, k)
   const steps = ORDER.filter((k) => stepLen(k) > 0)
   const allDone = steps.every((k) => stepDone(k) >= stepLen(k))
   const learned = Object.keys(convoItems).filter((id) => id.startsWith('t') && !convoItems[id].bad).length
@@ -646,14 +675,14 @@ export default function Convo() {
     const s = getState()
     const d = s.convoDays[today] || { done: {} }
     if (runAll) {
-      const nextStep = steps.find((k) => (d.done?.[doneKey(k)] || []).length < stepLen(k) && k !== step)
+      const nextStep = steps.find((k) => doneIn(d, k) < stepLen(k) && k !== step)
       if (nextStep) { setStep(nextStep); return }
     }
-    const finished = steps.every((k) => ((d.done?.[doneKey(k)] || []).length) >= stepLen(k))
+    const finished = steps.every((k) => doneIn(d, k) >= stepLen(k))
     if (finished) { const b = routineBonus(); if (b) { setBonus(b); confetti(undefined, undefined, 80) } }
     setView('home'); setStep(null)
   }
-  const remaining = (k) => (k === 'speak' ? [plan.speak] : k === 'role' ? [plan.role] : (plan[k] || []).filter((id) => !(day.done?.[doneKey(k)] || []).includes(id)))
+  const remaining = (k) => planIds(k).filter((id) => !(day.done?.[doneKey(k)] || []).includes(id))
 
   if (view === 'run' && step) {
     const ids = remaining(step)
@@ -673,53 +702,87 @@ export default function Convo() {
         {step === 'reflex' && <ReflexStep key={step} ids={ids} {...props} />}
         {step === 'speak' && <SpeakStep key={step} id={plan.speak} {...props} />}
         {step === 'role' && <RoleplayStep key={step} id={plan.role} {...props} />}
+        {step === 'explain' && <ExplainStep key={step} id={plan.explain} {...props} />}
         {levelUp && <LevelUp info={levelUp} onClose={() => setLevelUp(null)} />}
       </div>
     )
   }
 
-  // 14-day calendar: green = streak day (≥ 5 sentences)
+  const S = convoStats(store, today)
+  const best = Math.max(0, ...(convo.sprints || []).map((r) => r.r))
+  const totalSteps = steps.reduce((a, k) => a + stepLen(k), 0)
+  const doneSteps = steps.reduce((a, k) => a + stepDone(k), 0)
   const days14 = Array.from({ length: 14 }, (_, k) => addDays(today, k - 13))
+  const QUEST_TONE = { phrases: 'q-yellow', review: 'q-blue', role: 'q-pink', fresh: 'q-green', ask: 'q-blue', reflex: 'q-yellow', explain: 'q-pink', speak: 'q-green' }
   return (
     <div className="page talk">
-      <section className="card talk-level tint-yellow">
-        <div className="lv-big"><span>{CEFR[lvl.cefr]}</span><small>chặng {lvl.sub}/3</small></div>
-        <div className="grow">
+      <section className="card talk-hero2">
+        <Ring pct={lvl.pct / 100} size={112} stroke={11} className="lv-ring">
+          <b>{CEFR[lvl.cefr]}</b><small>chặng {lvl.sub}/3</small>
+        </Ring>
+        <div className="grow hero-main">
           <p className="eyebrow">💬 Tiếng Anh giao tiếp · {CEFR_VI[lvl.cefr]}</p>
           <h1>Cấp {lvl.name}</h1>
           <div className="xp-bar"><div style={{ width: `${lvl.pct}%` }} /><span>{lvl.into}/{lvl.need} XP</span></div>
-          <div className="stat-row">
-            <span className="stat"><b>🔥 {st}</b> ngày liên tiếp</span>
-            <span className="stat"><b>🎯 {Math.round(acc * 100)}%</b> chính xác gần đây</span>
-            <span className="stat"><b>🧠 {learned}</b> câu đã học · {mastered} thuộc lòng</span>
-            <span className="stat"><b>🏁 {lvl.stage + 1}/{STAGES}</b> chặng đến C2</span>
+          <div className="cefr-path" aria-label="Lộ trình A1 đến C2">
+            {CEFR.map((c, k) => <span key={c} className={k < lvl.cefr ? 'done' : k === lvl.cefr ? 'now' : ''}>{c}</span>)}
           </div>
+        </div>
+        <div className="hero-chips">
+          <span className="chip c-pink"><b>🔥 {st}</b><small>ngày liên tiếp</small></span>
+          <span className="chip c-green"><b>🎯 {Math.round(acc * 100)}%</b><small>chính xác gần đây</small></span>
+          <span className="chip c-blue"><b>🧠 {learned}</b><small>câu đã học · {mastered} thuộc</small></span>
+          <span className="chip c-yellow"><b>⚡ {S.last7.rt ? `${(S.last7.rt / 1000).toFixed(1)}s` : '—'}</b><small>tốc độ phản xạ</small></span>
         </div>
       </section>
 
       {bonus > 0 && <div className="ok-box">🎁 Hoàn thành nhiệm vụ hôm nay: +{bonus} XP thưởng{bonus >= 60 ? ' (gấp đôi vì chính xác ≥ 90%)' : ''}!</div>}
 
-      <section className="card">
+      <section className="card today-card">
         <div className="row between wrap gap-s">
           <h2>🗓️ Nhiệm vụ hôm nay</h2>
           <span className={`pill ${day.n >= MIN_PER_DAY ? 'green' : 'pink'}`}>{day.n}/{MIN_PER_DAY} câu tối thiểu {day.n >= MIN_PER_DAY ? '✓ giữ chuỗi' : ''}</span>
         </div>
-        <div className="quest-list">
+        <div className="today-progress"><div style={{ width: `${totalSteps ? (doneSteps / totalSteps) * 100 : 0}%` }} /><span>{doneSteps}/{totalSteps} phần · +{day.xp} XP hôm nay</span></div>
+        <div className="quest-grid">
           {steps.map((k) => {
             const ok = stepDone(k) >= stepLen(k)
             return (
-              <button key={k} className={`quest ${ok ? 'done' : ''}`} onClick={() => !ok && startStep(k)}>
-                <span className="q-icon">{STEP_INFO[k].icon}</span>
-                <span className="grow"><b>{STEP_INFO[k].name}</b><small>{STEP_INFO[k].sub}</small></span>
-                <span className="pill">{ok ? '✓' : `${stepDone(k)}/${stepLen(k)}`}</span>
+              <button key={k} className={`quest2 ${QUEST_TONE[k]} ${ok ? 'done' : ''}`} onClick={() => !ok && startStep(k)}>
+                <span className="q-icon">{ok ? '✅' : STEP_INFO[k].icon}</span>
+                <b>{STEP_INFO[k].name}</b>
+                <small>{STEP_INFO[k].sub}</small>
+                <span className="q-bar"><i style={{ width: `${(stepDone(k) / stepLen(k)) * 100}%` }} /></span>
+                <span className="q-count">{ok ? 'Xong' : `${stepDone(k)}/${stepLen(k)}`}</span>
               </button>
             )
           })}
         </div>
         {!allDone
-          ? <button className="btn start-btn" onClick={() => startStep(steps.find((k) => stepDone(k) < stepLen(k)), true)}><span>▶ Luyện tiếp nhiệm vụ hôm nay</span><small>~10–15 phút · thưởng XP khi xong hết</small></button>
-          : <p className="celebrate">🎉 Xong nhiệm vụ hôm nay! Mai quay lại để ôn đúng lúc nhé — sự lặp lại là chìa khóa.</p>}
+          ? <button className="btn start-btn" onClick={() => startStep(steps.find((k) => stepDone(k) < stepLen(k)), true)}><span>▶ Luyện tiếp nhiệm vụ hôm nay</span><small>~15 phút · thưởng XP khi xong hết</small></button>
+          : <p className="celebrate">🎉 Xong nhiệm vụ hôm nay! Chơi thêm ⚡ Thử thách 60 giây hoặc mai quay lại ôn đúng lúc nhé.</p>}
       </section>
+
+      <div className="grid-2 even">
+        <button className="card feature-card f-yellow" onClick={() => setView('sprint')}>
+          <span className="f-icon">⚡</span>
+          <span className="grow">
+            <b>Thử thách 60 giây</b>
+            <small>Luyện phản xạ: trả lời càng nhiều càng tốt trong 1 phút</small>
+            <span className="f-meta">🏆 Kỷ lục <b>{best}</b> · {(convo.sprints || []).length} lượt</span>
+          </span>
+          <Sparkline values={(convo.sprints || []).slice(-12).map((r) => r.r)} />
+        </button>
+        <button className="card feature-card f-blue" onClick={() => setView('stats')}>
+          <span className="f-icon">📊</span>
+          <span className="grow">
+            <b>Thống kê tiến bộ</b>
+            <small>Số câu, độ chính xác, tốc độ phản xạ, độ thuộc</small>
+            <span className="f-meta">Tuần này <b>{S.last7.n}</b> câu{S.prev7.n ? ` · tuần trước ${S.prev7.n}` : ''}</span>
+          </span>
+          <Sparkline values={S.daily.slice(-14).map((d) => d.n)} />
+        </button>
+      </div>
 
       <button className="card role-entry" onClick={() => setView('roles')}>
         <span className="lesson-scene">🎭</span>
@@ -750,7 +813,7 @@ export default function Convo() {
           <button className="link small" onClick={() => setView('test')}>📝 Làm lại bài kiểm tra xếp cấp</button>
         </section>
       </div>
-      <p className="muted small source-note">Câu dịch: <a href="https://tatoeba.org" target="_blank" rel="noreferrer">Tatoeba</a> (CC BY 2.0 FR) · Hội thoại phản xạ: DailyDialog (Li et al. 2017, CC BY-NC-SA 4.0) · Cấp độ ước lượng theo NGSL (CC BY-SA 4.0) · Mẫu câu & đề nói: Capy TOEIC.</p>
+      <p className="muted small source-note">Câu dịch: <a href="https://tatoeba.org" target="_blank" rel="noreferrer">Tatoeba</a> (CC BY 2.0 FR) · Hội thoại phản xạ: DailyDialog (Li et al. 2017, CC BY-NC-SA 4.0) · Cấp độ ước lượng theo NGSL (CC BY-SA 4.0) · Mẫu câu, nhập vai & Diễn đạt ý: Capy TOEIC.</p>
     </div>
   )
 }
