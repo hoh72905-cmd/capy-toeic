@@ -1,5 +1,6 @@
 import { getState, setState } from './store.js'
 import { todayKey, addDays } from './date.js'
+import { planProgress } from './convo.js'
 import { dayPicks } from '../data/plan.js'
 import { todayCurriculum } from './curriculum.js'
 import { dailyPlan, nextItems } from './course.js'
@@ -41,7 +42,8 @@ export function pruneOld() {
     const todos = { ...st.todos }
     for (const d of oldDays) { const keep = (todos[d] || []).filter((t) => !t.auto); if (keep.length) todos[d] = keep; else delete todos[d] }
     const convoDays = { ...st.convoDays }
-    for (const d of oldPlans) { const { plan, done, ...rest } = convoDays[d]; convoDays[d] = rest }
+    // keep only the share of the plan that was done, for the daily progress chart
+    for (const d of oldPlans) { const pp = planProgress(convoDays[d]); const { plan, done, ...rest } = convoDays[d]; convoDays[d] = pp ? { ...rest, pd: [pp.done, pp.total] } : rest }
     return { todos, convoDays }
   })
 }

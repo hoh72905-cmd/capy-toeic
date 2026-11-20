@@ -2,7 +2,7 @@
 import { useMemo } from 'react'
 import { useStore } from '../lib/store.js'
 import { convoStats, TYPE_NAME } from '../lib/convoStats.js'
-import { CEFR, CEFR_VI, STAGES, MIN_PER_DAY } from '../lib/convo.js'
+import { CEFR, CEFR_VI, STAGES } from '../lib/convo.js'
 import { fromKey } from '../lib/date.js'
 import { BarChart, LineChart, StackBar } from '../components/Charts.jsx'
 import Speak from '../components/Speak.jsx'
@@ -39,8 +39,17 @@ export default function ConvoStats({ D, onBack, onPractice }) {
   const { lvl } = S
   const hard = S.hard.filter((h) => byId.has(h.id))
 
-  const bars = S.daily.map((d) => ({ label: dm(d.d), value: d.n, dim: d.n < MIN_PER_DAY, title: dm(d.d), text: d.n ? `${d.n} câu · đúng ${d.ok} · +${d.xp} XP` : 'Không luyện' }))
-  const accLine = S.weekly.map((w) => ({ label: dm(w.start), value: w.acc == null ? null : Math.round(w.acc * 100), title: `Tuần từ ${dm(w.start)}`, text: w.acc == null ? '' : `${Math.round(w.acc * 100)}% đúng · ${w.n} câu` }))
+  // Daily progress in percent: share of the day's tasks done (100% = the whole routine), and accuracy
+  const P100 = { max: 100, ticks: [0, 25, 50, 75, 100], fmt: (v) => `${Math.round(v)}%`, padL: 40 }
+  const progBars = S.daily.map((d) => {
+    const v = Math.round(d.pct * 100)
+    return { label: dm(d.d), value: v, dim: v < 100, title: `${dm(d.d)} · ${v}%`, text: d.plan ? `${d.plan.done}/${d.plan.total} phần nhiệm vụ · ${d.n} câu · +${d.xp} XP` : d.n ? `ước tính từ ${d.n} câu · +${d.xp} XP` : 'Không luyện' }
+  })
+  const accBars = S.daily.map((d) => ({ label: dm(d.d), value: d.acc == null ? 0 : Math.round(d.acc * 100), dim: d.acc != null && d.acc < 0.8, title: `${dm(d.d)} · ${d.acc == null ? '—' : `${Math.round(d.acc * 100)}%`}`, text: d.n ? `đúng ${d.ok}/${d.n} câu` : 'Không luyện' }))
+  const last7 = S.daily.slice(-7)
+  const avgPct7 = Math.round((last7.reduce((a, d) => a + d.pct, 0) / 7) * 100)
+  const full7 = last7.filter((d) => d.pct >= 1).length
+  const today = S.daily[S.daily.length - 1]
   const rtLine = S.weekly.map((w) => ({ label: dm(w.start), value: w.rt == null ? null : +(w.rt / 1000).toFixed(1), title: `Tuần từ ${dm(w.start)}`, text: w.rt == null ? '' : `chọn câu đáp trung bình ${(w.rt / 1000).toFixed(1)} giây` }))
   const ttLine = S.weekly.map((w) => ({ label: dm(w.start), value: w.tt == null ? null : +(w.tt / 1000).toFixed(1), title: `Tuần từ ${dm(w.start)}`, text: w.tt == null ? '' : `nghĩ & nói một câu trung bình ${(w.tt / 1000).toFixed(1)} giây` }))
   const sprintLine = S.sprints.slice(-20).map((r, i) => ({ label: dm(r.d), value: r.r, title: `Lượt ${i + 1} · ${dm(r.d)}`, text: `${r.r} đúng, ${r.w} sai · ${(r.ms / 1000).toFixed(1)}s/câu` }))
@@ -53,18 +62,20 @@ export default function ConvoStats({ D, onBack, onPractice }) {
     rf: 'Phản xạ đáp lời còn chậm: chơi thêm 1–2 lượt ⚡ Thử thách 60 giây mỗi ngày để quen các cặp câu thông dụng.',
     role: 'Hội thoại còn khó: luyện lại bài nhập vai cũ trong thư viện, lần hai bật "Ẩn chữ" để luyện nghe.',
     ex: 'Diễn đạt ý chưa đủ ý: trước khi nói, liệt kê 3 ý bằng từ khóa, rồi nối bằng because / so / however.',
+    long: 'Câu dài còn sai nhiều: chia câu tiếng Việt thành 2–3 cụm (ai làm gì · khi nào/ở đâu · vì sao), dịch từng cụm rồi nối lại.',
+    dlg: 'Đối đáp dài còn thiếu ý: đọc lại 3 "ý cần có", nói mỗi ý một câu ngắn rồi nối bằng because / so / but.',
   }
 
   return (
     <div className="page talk-stats">
       <div className="row between wrap gap-s">
         <button className="btn sm" onClick={onBack}>← Giao tiếp</button>
-        <span className="muted small">Bắt đầu luyện từ {dm(S.firstDay)} · {S.activeDays} ngày đã luyện</span>
+        <span className="muted small">Bắt đầu luyện từ {dm(S.firstDay)} · {S.activeDays} ngày đã luyện · tổng {S.total} câu</span>
       </div>
       <h1>📊 Thống kê giao tiếp</h1>
 
       <div className="tile-grid">
-        <Tile icon="🗣️" label="Câu đã nói (tổng)" value={S.total} tone="t-yellow"><small className="delta flat">tuần này {S.last7.n} câu</small></Tile>
+        <Tile icon="📊" label="Tiến độ hôm nay" value={`${Math.round(today.pct * 100)}%`} tone="t-yellow"><small className="delta flat">TB 7 ngày {avgPct7}% · {full7}/7 ngày xong 100%</small></Tile>
         <Tile icon="🔥" label="Chuỗi ngày" value={`${S.streak} ngày`} tone="t-pink"><small className="delta flat">dài nhất {S.longest} ngày</small></Tile>
         <Tile icon="🎯" label="Chính xác 7 ngày" value={pct(S.last7.acc)} tone="t-green"><Delta now={S.last7.acc} before={S.prev7.acc} fmt={(v) => Math.round(v * 100)} unit="%" /></Tile>
         <Tile icon="⚡" label="Tốc độ phản xạ" value={sec(S.last7.rt)} tone="t-blue"><Delta now={S.last7.rt} before={S.prev7.rt} better="down" fmt={(v) => (v / 1000).toFixed(1)} unit="s" /></Tile>
@@ -90,17 +101,21 @@ export default function ConvoStats({ D, onBack, onPractice }) {
       </section>
 
       <section className="card">
-        <h2>🗓️ Số câu mỗi ngày · 30 ngày</h2>
-        <p className="muted small">Cột nhạt: dưới {MIN_PER_DAY} câu (chưa giữ chuỗi). Chạm vào cột để xem chi tiết.</p>
-        <BarChart data={bars} goal={MIN_PER_DAY} goalLabel={`tối thiểu ${MIN_PER_DAY}`} ariaLabel="Số câu mỗi ngày trong 30 ngày" />
+        <div className="row between wrap gap-s">
+          <h2>📊 Tiến độ mỗi ngày · % nhiệm vụ hoàn thành</h2>
+          <span className="pill blue">TB 7 ngày {avgPct7}%</span>
+        </div>
+        <p className="muted small">100% = làm xong toàn bộ nhiệm vụ của ngày. Cột đậm: xong 100% · cột nhạt: chưa xong. Chạm vào cột để xem chi tiết.</p>
+        <BarChart data={progBars} {...P100} valueAt={progBars.length - 1} height={190} ariaLabel="Phần trăm nhiệm vụ hoàn thành mỗi ngày trong 30 ngày" />
+      </section>
+
+      <section className="card">
+        <h2>🎯 Độ chính xác mỗi ngày · %</h2>
+        <p className="muted small">Phần trăm câu đúng hoặc gần đúng trong ngày. Cột nhạt: dưới 80% — nên ôn lại kỹ hơn.</p>
+        <BarChart data={accBars} {...P100} valueAt={accBars.length - 1} ariaLabel="Độ chính xác mỗi ngày trong 30 ngày" />
       </section>
 
       <div className="grid-2">
-        <section className="card">
-          <h2>🎯 Độ chính xác theo tuần</h2>
-          <p className="muted small">Phần trăm câu đúng hoặc gần đúng · 12 tuần.</p>
-          <LineChart points={accLine} min={0} max={100} format={(v) => `${Math.round(v)}%`} ariaLabel="Độ chính xác theo tuần" />
-        </section>
         <section className="card">
           <h2>⚡ Thời gian chọn câu đáp</h2>
           <p className="muted small">Giây trung bình để chọn đúng câu đáp · <b>càng thấp càng phản xạ nhanh</b>.</p>

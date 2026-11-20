@@ -1016,3 +1016,48 @@ button.countdown:hover { transform: rotate(-4deg) scale(1.06); }
 .page.talk > *, .page.talk-run > *, .page.talk-stats > *, .talk .grid-2 > *, .talk-run .stack > * { animation: none; }
 .talk .bob, .talk-run .bob, .talk-stats .bob, .talk .flame, .talk .wave-hand { animation: none; }
 .sprint-card { animation: none; }
+
+/* ===== Long sentences, long replies, intensity, percent charts ===== */
+.mode-path { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: -2px 0 4px; }
+.mode-path span { width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center; background: #f6efe2; font-size: .95rem; opacity: .55; }
+.mode-path span.now { background: var(--yellow); opacity: 1; box-shadow: 0 0 0 2px var(--yellow-deep); }
+.mode-path small { font-weight: 800; margin-left: 4px; }
+.long-vi { font-size: 1.15rem; line-height: 1.45; }
+.dlg-vi { font-size: 1rem; line-height: 1.45; margin: 0; }
+.chunk-bank { display: flex; flex-wrap: wrap; gap: 8px; }
+.chunk-bank.hint { align-items: center; }
+.chunk { font: inherit; font-weight: 700; padding: 8px 12px; border-radius: 12px; border: 2px solid var(--ring); background: #fff; box-shadow: 0 3px 0 var(--edge); cursor: pointer; color: var(--ink); }
+.chunk:disabled { opacity: .3; box-shadow: none; cursor: default; }
+.chunk.placed:disabled { opacity: 1; cursor: default; }
+.chunk.ghost { cursor: default; box-shadow: none; border-style: dashed; color: var(--muted); padding: 4px 10px; }
+.chunk.placed { background: #e8f3fd; border-color: #9ccbf2; box-shadow: 0 3px 0 #9ccbf2; }
+.chunk.placed.off { background: #ffe8ee; border-color: #f3a9b9; box-shadow: 0 3px 0 #f3a9b9; text-decoration: line-through; text-decoration-color: #d1436a; }
+.build-line { min-height: 58px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px; border: 2px dashed var(--ring); border-radius: 16px; background: #fffdf7; }
+.build-line.fb-right { border-style: solid; border-color: var(--green); background: var(--green-soft); }
+.gap-text { font-size: 1.08rem; line-height: 2.7; margin: 4px 0; }
+.gap-wrap { position: relative; white-space: nowrap; }
+input.gap { display: inline-block; font: inherit; font-weight: 700; padding: 2px 6px; margin: 0 2px; border: none; border-bottom: 3px solid var(--blue); border-radius: 6px 6px 0 0; background: #eef7fd; text-align: center; min-width: 4ch; }
+input.gap:focus { outline: none; background: #fff6d6; border-bottom-color: var(--yellow-deep); }
+input.gap.ok { background: var(--green-soft); border-bottom-color: var(--green); }
+input.gap.bad { background: #ffe8ee; border-bottom-color: #d1436a; }
+.gap-fix { position: absolute; left: 0; right: 0; top: 100%; margin-top: -3px; text-align: center; font-size: .72rem; font-weight: 800; color: var(--good); line-height: 1; }
+.option.long-opt { font-weight: 600; line-height: 1.4; }
+.row.end { justify-content: flex-end; }
+.dlg-card .bubble-row { margin: 2px 0 4px; }
+.dlg-card .bubble { max-width: 100%; flex: 1; }
+.intensity { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 2px 0 10px; }
+.intensity .seg { font: inherit; display: flex; flex-direction: column; align-items: flex-start; gap: 0; padding: 6px 12px; border-radius: 12px; border: 2px solid var(--ring); background: #fff; font-weight: 800; cursor: pointer; color: var(--ink); }
+.intensity .seg small { font-weight: 700; color: var(--muted); font-size: .7rem; }
+.intensity .seg.on { background: var(--yellow); border-color: var(--yellow-deep); box-shadow: 0 3px 0 var(--yellow-deep); }
+.today-progress span b { font-size: 1rem; }
+.sc { position: relative; overflow: hidden; }
+.sc i { position: absolute; left: 0; right: 0; bottom: 0; background: rgba(30, 136, 229, .22); pointer-events: none; }
+.sc span, .sc b { position: relative; }
+.chart .bar-val { fill: var(--ink); font-size: 11px; font-weight: 800; paint-order: stroke; stroke: #fff; stroke-width: 3px; }
+@media (max-width: 520px) {
+  .intensity > span { flex-basis: 100%; }
+  .intensity .seg { flex: 1 1 0; min-width: 0; padding: 6px 8px; font-size: .9rem; }
+  .intensity .seg small { font-size: .64rem; }
+  .chunk { padding: 7px 10px; font-size: .92rem; }
+  .gap-text { font-size: 1rem; }
+}

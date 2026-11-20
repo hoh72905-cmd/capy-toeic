@@ -8,7 +8,7 @@ import { translate } from '../lib/translate.js'
 import { confetti } from '../lib/confetti.js'
 import {
   loadConvo, levelInfo, accuracy, streak, todayPlan, recordAnswer, routineBonus, flagItem, placementItems, placementLevel,
-  setStart, CEFR, CEFR_VI, MIN_PER_DAY, STAGES, roleUnlocked,
+  setStart, CEFR, CEFR_VI, MIN_PER_DAY, STAGES, roleUnlocked, INTENSITY, intensityOf, setIntensity, planProgress,
 } from '../lib/convo.js'
 import { convoStats } from '../lib/convoStats.js'
 import { PHRASES, SPEAK_PROMPTS } from '../data/convoPhrases.js'
@@ -22,6 +22,8 @@ import { EXPLAIN_BY_ID } from '../data/explain.js'
 import { gradeExplain, framesFor, KIND_NAME } from '../lib/explain.js'
 import ConvoStats from './ConvoStats.jsx'
 import ConvoSprint from './ConvoSprint.jsx'
+import { LONG_BY_ID, LONG_DLG, TOPIC_VI } from '../data/convoLong.js'
+import { LONG_MODES, LONG_MODE_NAME, DLG_MODES, DLG_MODE_NAME, modeOf, gradeLong, chunks, gradeOrder, gapsFor, gradeGaps, gradeReply } from '../lib/longPractice.js'
 
 const PHRASE_BY_ID = new Map(PHRASES.map((p) => [p.id, p]))
 const SPEAK_BY_ID = new Map(SPEAK_PROMPTS.map((p) => [p.id, p]))
@@ -35,8 +37,12 @@ const STEP_INFO = {
   role: { icon: '🎭', name: 'Nhập vai hội thoại', sub: 'Nghe người kia nói, bạn nói lượt của mình' },
   speak: { icon: '💬', name: 'Nói nhanh', sub: 'Nói 30–60 giây theo chủ đề' },
   explain: { icon: '🧩', name: 'Diễn đạt ý', sub: 'Nói/viết vài câu bằng lời của bạn, app chấm đủ ý' },
+  long: { icon: '📜', name: 'Dịch câu dài', sub: 'Câu 15–30 từ: dịch, xếp cụm, nghe chép, điền từ, nói' },
+  dialog: { icon: '🗣️', name: 'Đối đáp câu dài', sub: 'Nghe người kia nói, trả lời 2–3 ý bằng câu dài' },
 }
-const ORDER = ['phrases', 'review', 'role', 'fresh', 'ask', 'reflex', 'explain', 'speak']
+const ORDER = ['phrases', 'review', 'long', 'dialog', 'role', 'fresh', 'ask', 'reflex', 'explain', 'speak']
+// Rough minutes per item, for the time estimate of the day
+const MINUTES = { phrases: 0.5, review: 0.6, long: 1.6, dialog: 2.2, role: 4, fresh: 0.8, ask: 0.8, reflex: 0.3, explain: 4, speak: 2 }
 // Personal average time to pick a reflex reply over the last 7 days (ms), or null
 function myReflexMs() {
   const days = getState().convoDays
@@ -602,6 +608,282 @@ function ChooseLevel({ onDone }) {
   )
 }
 
+// ---------------------------------------------------------------- long sentences
+// Each sentence comes back on the review rhythm, and each time as a different exercise
+// (translate → put the chunks in order → dictation → fill the gaps → say it). A sentence that went
+// wrong comes back once more at the end of the step as a quick drill.
+function ModePath({ modes, names, now }) {
+  return (
+    <div className="mode-path" aria-label="Các dạng luyện của câu này">
+      {modes.map((m, k) => <span key={k} className={k === now ? 'now' : ''} title={names[m]}>{names[m].split(' ')[0]}</span>)}
+      <small className="muted">{names[modes[now]].replace(/^\S+\s/, '')}</small>
+    </div>
+  )
+}
+
+function LongResult({ item, verdict, children }) {
+  const title = { right: '✅ Chính xác!', close: '👍 Gần đúng', wrong: '❌ Chưa đúng' }[verdict]
+  return (
+    <div className={`feedback fb-${verdict}`}>
+      <b>{title}</b>
+      {children}
+      <p className="best"><Speak text={item.en[0]} small /> {item.en[0]}</p>
+      <p className="small muted">🇻🇳 {item.vi}</p>
+    </div>
+  )
+}
+
+function LongStep({ ids: startIds, onDone, onLevelUp }) {
+  const [queue, setQueue] = useState(() => startIds.filter((id) => LONG_BY_ID.has(id)).map((id) => {
+    const seen = getState().convoItems[id]?.seen || 0
+    let mode = modeOf(LONG_MODES, seen)
+    if (mode === 'speak' && !canListen()) mode = 'translate'
+    return { id, mode, slot: seen % LONG_MODES.length, seen }
+  }))
+  const [i, setI] = useState(0)
+  const q = queue[i]
+  const item = q ? LONG_BY_ID.get(q.id) : null
+  const [answer, setAnswer] = useState('')
+  const [result, setResult] = useState(null)
+  const [hint, setHint] = useState(false)
+  const [picked, setPicked] = useState([])
+  const [gapVals, setGapVals] = useState([])
+  const gapRefs = useRef([])
+  const shownAt = useRef(Date.now())
+  const parts = useMemo(() => (item ? chunks(item.en[0]) : []), [item])
+  const bank = useMemo(() => (item ? shuffle(parts.map((t, k) => ({ t, k })), hash(item.id) + (q?.seen || 0) * 7 + 1) : []), [item, parts]) // eslint-disable-line react-hooks/exhaustive-deps
+  const gap = useMemo(() => (item ? gapsFor(item.en[0], item.lv, q?.seen || 0) : null), [item]) // eslint-disable-line react-hooks/exhaustive-deps
+  const [shownI, setShownI] = useState(i)
+  if (shownI !== i) { setShownI(i); setAnswer(''); setResult(null); setHint(false); setPicked([]); setGapVals([]) }
+  useEffect(() => {
+    shownAt.current = Date.now()
+    if (item && q.mode === 'dictate') setTimeout(() => speak(item.en[0]), 300)
+    if (item && q.mode === 'gap') setTimeout(() => gapRefs.current[0]?.focus(), 50)
+  }, [i]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!item) onDone() }, [item]) // eslint-disable-line react-hooks/exhaustive-deps
+  const next = () => { stopSpeak(); if (i + 1 >= queue.length) onDone(); else setI(i + 1) }
+  const allPlaced = q?.mode === 'build' && picked.length === parts.length
+  const finish = (g) => {
+    if (result) return
+    const took = Date.now() - shownAt.current
+    const verdict = hint && g.verdict === 'right' ? 'close' : g.verdict
+    setResult({ ...g, verdict })
+    const r = recordAnswer(item.id, q.drill ? 'drill' : 'long', verdict, { ms: took, skill: q.mode === 'dictate' ? 'listen' : undefined })
+    if (r.levelUp) onLevelUp(r.levelUp)
+    if (!q.drill && verdict !== 'right') setQueue((qs) => [...qs, { id: item.id, mode: q.mode === 'build' ? 'dictate' : 'build', slot: q.slot, seen: q.seen + 1, drill: true }])
+    setTimeout(() => speak(item.en[0]), 250)
+  }
+  const checkBuild = () => allPlaced && finish(gradeOrder(picked.map((k) => bank[k].t), parts))
+  useEnter(!!item && (!!result || allPlaced), result ? next : checkBuild)
+  // Build mode: Backspace takes the last chunk back
+  useEffect(() => {
+    if (q?.mode !== 'build' || result) return
+    const onKey = (e) => { if (e.key === 'Backspace' && !/INPUT|TEXTAREA/.test(e.target?.tagName)) { e.preventDefault(); setPicked((p) => p.slice(0, -1)) } }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [q, result])
+  if (!item || shownI !== i) return null // shownI: the item's state is being reset
+
+  const alt = getState().convoItems[item.id]?.alt || []
+  const refs = q.mode === 'dictate' ? [item.en[0]] : [...item.en, ...alt]
+  const submitText = () => { if (!result && answer.trim()) finish(gradeLong(answer, refs)) }
+  const submitGaps = () => { if (!result) finish(gradeGaps(gapVals, gap.words, gap.gaps)) }
+  const accept = () => { recordAnswer(item.id, q.drill ? 'drill' : 'long', 'right', { alt: answer.trim() }); setResult({ ...result, verdict: 'right', score: 1 }) }
+  const typed = q.mode === 'translate' || q.mode === 'speak' || q.mode === 'dictate'
+
+  return (
+    <div className="card step-card long-card">
+      <p className="muted small">📜 Câu dài {i + 1}/{queue.length} · {CEFR[item.lv]} · {TOPIC_VI[item.topic]} · {item.en[0].split(' ').length} từ{q.drill ? ' · 🔁 luyện lại ngay' : ''}</p>
+      <ModePath modes={LONG_MODES} names={LONG_MODE_NAME} now={q.drill ? LONG_MODES.indexOf(q.mode) : q.slot} />
+
+      {q.mode === 'dictate' ? (
+        <>
+          <p className="prompt-label">🎧 Nghe rồi chép lại cả câu</p>
+          <div className="row gap-s"><button className="btn blue" onClick={() => speak(item.en[0])}>▶ Nghe lại</button>
+            <button className="btn" onClick={() => speak(item.en[0], { rate: 0.7 })}>🐢 Nghe chậm</button></div>
+        </>
+      ) : (
+        <>
+          <p className="prompt-label">{q.mode === 'build' ? '🧱 Xếp các cụm thành câu tiếng Anh:' : q.mode === 'gap' ? '🔤 Điền các từ còn thiếu:' : q.mode === 'speak' ? '🎙️ Nói cả câu bằng tiếng Anh (bấm 🎙️, hoặc gõ):' : '✍️ Dịch sang tiếng Anh:'}</p>
+          <h2 className="vi-prompt long-vi">{item.vi}</h2>
+        </>
+      )}
+
+      {typed && <AnswerBox rows={3} value={answer} onChange={setAnswer} onSubmit={result ? next : submitText} disabled={!!result} placeholder={q.mode === 'dictate' ? 'Câu bạn nghe được…' : 'Câu tiếng Anh của bạn…'} />}
+      {q.mode === 'translate' && !result && hint && (
+        <div className="chunk-bank hint"><span className="muted small">Các cụm (xáo trộn):</span>{bank.map((c, k) => <span key={k} className="chunk ghost">{c.t}</span>)}</div>
+      )}
+
+      {q.mode === 'build' && (
+        <>
+          <div className={`build-line ${result ? `fb-${result.verdict}` : ''}`}>
+            {picked.length ? picked.map((k, n) => (
+              <button key={n} className={`chunk placed ${result && bank[k].t !== parts[n] ? 'off' : ''}`} disabled={!!result} onClick={() => setPicked((p) => p.filter((_, j) => j !== n))}>{bank[k].t}</button>
+            )) : <span className="muted small">Chạm các cụm bên dưới theo đúng thứ tự (Backspace để bỏ cụm cuối)…</span>}
+          </div>
+          {!result && <div className="chunk-bank">{bank.map((c, k) => <button key={k} className="chunk" disabled={picked.includes(k)} onClick={() => setPicked((p) => [...p, k])}>{c.t}</button>)}</div>}
+        </>
+      )}
+
+      {q.mode === 'gap' && (
+        <p className="gap-text">
+          {gap.words.map((w, idx) => {
+            const n = gap.gaps.indexOf(idx)
+            if (n < 0) return <span key={idx}>{w} </span>
+            const [, pre, word, post] = w.match(/^([^A-Za-z'-]*)([A-Za-z'-]+)(.*)$/) || ['', '', w, '']
+            const res = result?.res?.[n]
+            return (
+              <span key={idx} className="gap-wrap">{pre}
+                <input ref={(el) => { gapRefs.current[n] = el }} className={`gap ${res ? (res.ok ? 'ok' : 'bad') : ''}`} style={{ width: `${Math.max(4, word.length + 1)}ch` }}
+                  value={gapVals[n] || ''} disabled={!!result} placeholder={`${word[0]}…`} autoCapitalize="off" spellCheck={false}
+                  onChange={(e) => setGapVals((v) => { const c = [...v]; c[n] = e.target.value; return c })}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (n + 1 < gap.gaps.length) gapRefs.current[n + 1]?.focus(); else submitGaps() } }} />
+                {res && !res.exact && <small className="gap-fix">{res.want}</small>}{post}{' '}
+              </span>
+            )
+          })}
+        </p>
+      )}
+
+      {!result && (
+        <div className="row between wrap gap-s">
+          {q.mode === 'translate' && !hint ? <button className="link small" onClick={() => setHint(true)}>💡 Gợi ý các cụm từ</button> : <span />}
+          {q.mode === 'build' ? <button className="btn yellow" onClick={checkBuild} disabled={!allPlaced}>Kiểm tra ✓ {allPlaced && <kbd>Enter</kbd>}</button>
+            : q.mode === 'gap' ? <button className="btn yellow" onClick={submitGaps}>Kiểm tra ✓</button>
+            : <button className="btn yellow" onClick={submitText} disabled={!answer.trim()}>Kiểm tra ✓</button>}
+        </div>
+      )}
+      {result && (
+        <>
+          {typed ? <Feedback result={result} answer={answer} refs={refs} item={item} onAccept={q.mode === 'dictate' ? null : accept} />
+            : <LongResult item={item} verdict={result.verdict}>
+              {q.mode === 'build' && result.wrong > 0 && <p className="small">{result.wrong} cụm chưa đúng chỗ (gạch đỏ ở trên).</p>}
+              {q.mode === 'gap' && <p className="small">Đúng {result.res.filter((r) => r.ok).length}/{result.res.length} từ.</p>}
+            </LongResult>}
+          {!q.drill && result.verdict !== 'right' && <p className="small muted">🔁 Câu này sẽ quay lại cuối phần để luyện thêm một lần ({q.mode === 'build' ? 'nghe & chép' : 'xếp cụm'}).</p>}
+          <button className="btn blue wide" onClick={next}>Tiếp ➜ <kbd>Enter</kbd></button>
+        </>
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------- long replies in a conversation
+function DialogStep({ ids: startIds, onDone, onLevelUp }) {
+  const [queue, setQueue] = useState(() => startIds.filter((id) => LONG_BY_ID.has(id)).map((id) => {
+    const seen = getState().convoItems[id]?.seen || 0
+    return { id, mode: modeOf(DLG_MODES, seen), slot: seen % DLG_MODES.length, seen }
+  }))
+  const [i, setI] = useState(0)
+  const q = queue[i]
+  const item = q ? LONG_BY_ID.get(q.id) : null
+  const [answer, setAnswer] = useState('')
+  const [result, setResult] = useState(null)
+  const [retry, setRetry] = useState(false) // writing again after the graded try (not graded again)
+  const [pick, setPick] = useState(null)
+  const [showText, setShowText] = useState(false)
+  const shownAt = useRef(Date.now())
+  const options = useMemo(() => {
+    if (!item) return []
+    const others = shuffle(LONG_DLG.filter((o) => o.id !== item.id && Math.abs(o.lv - item.lv) <= 1 && o.topic !== item.topic), hash(item.id) + q.seen).slice(0, 2).map((o) => o.b)
+    return shuffle([item.b, ...others], hash(item.id) * 3 + q.seen)
+  }, [item]) // eslint-disable-line react-hooks/exhaustive-deps
+  const live = useMemo(() => (item ? gradeReply(answer, item) : null), [answer, item])
+  const [shownI, setShownI] = useState(i)
+  if (shownI !== i) { setShownI(i); setAnswer(''); setResult(null); setRetry(false); setPick(null); setShowText(false) }
+  useEffect(() => {
+    shownAt.current = Date.now()
+    if (item) setTimeout(() => speak(q.mode === 'shadow' ? item.b : item.a), 300)
+  }, [i]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!item) onDone() }, [item]) // eslint-disable-line react-hooks/exhaustive-deps
+  const next = () => { stopSpeak(); if (i + 1 >= queue.length) onDone(); else setI(i + 1) }
+  useEnter(!!item && !!result && !retry, next)
+  if (!item || shownI !== i) return null
+
+  const finish = (g) => {
+    const took = Date.now() - shownAt.current
+    setResult(g)
+    const r = recordAnswer(item.id, q.drill ? 'drill' : 'dialog', g.verdict, { ms: took, score: g.score, skill: q.mode === 'shadow' ? 'listen' : undefined })
+    if (r.levelUp) onLevelUp(r.levelUp)
+    if (!q.drill && g.verdict !== 'right') setQueue((qs) => [...qs, { id: item.id, mode: 'shadow', slot: 2, seen: q.seen + 1, drill: true }])
+    setTimeout(() => speak(item.b), 300)
+  }
+  const submitReply = () => {
+    if (!answer.trim()) return
+    if (retry) { setResult(gradeReply(answer, item)); setRetry(false); return } // practice only
+    if (!result) finish(gradeReply(answer, item))
+  }
+  const choose = (o) => { if (pick) return; setPick(o); finish({ verdict: o === item.b ? 'right' : 'wrong', score: o === item.b ? 1 : 0 }) }
+  const submitShadow = () => { if (!result && answer.trim()) finish(gradeLong(answer, [item.b])) }
+  const g = q.mode === 'reply' ? (result && !retry ? result : live) : null
+
+  return (
+    <div className="card step-card dlg-card">
+      <p className="muted small">🗣️ Đối đáp câu dài {i + 1}/{queue.length} · {CEFR[item.lv]} · {TOPIC_VI[item.topic]}{q.drill ? ' · 🔁 luyện lại ngay' : ''}</p>
+      <ModePath modes={DLG_MODES} names={DLG_MODE_NAME} now={q.slot} />
+      <div className="bubble-row them">
+        <span className="avatar">💬</span>
+        <div className="bubble">
+          {q.mode === 'shadow' && !result ? <i className="muted">Nghe câu đáp mẫu rồi nhắc lại…</i>
+            : q.mode === 'pick' && !showText && !result ? <i className="muted">Nghe người kia nói… <button className="link small" onClick={() => setShowText(true)}>hiện chữ</button></i>
+            : <b>{q.mode === 'shadow' ? item.b : item.a}</b>}
+          <div className="row gap-s"><button className="btn sm blue" onClick={() => speak(q.mode === 'shadow' ? item.b : item.a)}>▶ Nghe</button>
+            <button className="btn sm" onClick={() => speak(q.mode === 'shadow' ? item.b : item.a, { rate: 0.7 })}>🐢 Chậm</button></div>
+        </div>
+      </div>
+
+      {q.mode === 'reply' && (
+        <>
+          <p className="prompt-label">🇻🇳 Ý bạn muốn trả lời (nói/viết 2–3 câu bằng tiếng Anh):</p>
+          <p className="vi-prompt dlg-vi">{item.vi}</p>
+          <div className="idea-chips"><span className="muted small">Ý cần có:</span>
+            {g.ideas.map((it) => <span key={it.label} className={`idea ${it.ok ? 'ok' : ''}`}>{it.ok ? '✓' : '○'} {it.label}</span>)}
+          </div>
+          <AnswerBox rows={4} value={answer} onChange={setAnswer} onSubmit={submitReply} disabled={!!result && !retry} placeholder="Câu trả lời của bạn (gõ hoặc bấm 🎙️ để nói)…" />
+          <div className="explain-meters">
+            <span className={g.words >= g.target ? 'ok' : ''}>📝 {g.words}/{g.target} từ</span>
+            <span className={g.links.length >= g.need ? 'ok' : ''}>🔗 {g.links.length}/{g.need} từ nối{g.links.length ? `: ${g.links.slice(0, 3).join(', ')}` : ''}</span>
+            <span className={g.ideas.every((x) => x.ok) ? 'ok' : ''}>💡 {g.ideas.filter((x) => x.ok).length}/{g.ideas.length} ý</span>
+          </div>
+          {(!result || retry) && <div className="row end"><button className="btn yellow" onClick={submitReply} disabled={!answer.trim()}>{retry ? 'Chấm lại (luyện thêm)' : 'Kiểm tra ✓'}</button></div>}
+        </>
+      )}
+
+      {q.mode === 'pick' && (
+        <div className="options">
+          {options.map((o) => <button key={o} className={`option long-opt ${pick ? (o === item.b ? 'right' : o === pick ? 'wrong' : 'dim') : ''}`} onClick={() => choose(o)}>{o}</button>)}
+        </div>
+      )}
+
+      {q.mode === 'shadow' && (
+        <>
+          <AnswerBox rows={3} value={answer} onChange={setAnswer} onSubmit={result ? next : submitShadow} disabled={!!result} placeholder="Gõ hoặc nói lại câu đáp bạn nghe được…" />
+          {!result && <div className="row end"><button className="btn yellow" onClick={submitShadow} disabled={!answer.trim()}>Kiểm tra ✓</button></div>}
+        </>
+      )}
+
+      {result && !retry && (
+        <>
+          <div className={`feedback fb-${result.verdict}`}>
+            <b>{{ right: '🌟 Trả lời tốt!', close: '👍 Khá tốt — thêm chút nữa', wrong: '💪 Chưa đạt' }[result.verdict]}</b>
+            {q.mode === 'reply' && <span className="muted small"> · {Math.round(result.score * 100)} điểm</span>}
+            {q.mode === 'reply' && result.ideas?.some((x) => !x.ok) && <p className="small">Còn thiếu: {result.ideas.filter((x) => !x.ok).map((x) => x.label).join(', ')}.</p>}
+            {q.mode === 'shadow' && <p className="small">Khớp {Math.round(result.score * 100)}%.</p>}
+            <p className="small muted">Câu đáp mẫu:</p>
+            <p className="best"><Speak text={item.b} small /> {item.b}</p>
+            {q.mode !== 'reply' && <p className="small muted">🇻🇳 {item.vi}</p>}
+          </div>
+          {!q.drill && result.verdict !== 'right' && <p className="small muted">🔁 Câu đáp mẫu sẽ quay lại cuối phần để bạn nghe & nhắc lại.</p>}
+          <div className="row gap-s wrap">
+            {q.mode === 'reply' && <button className="btn" onClick={() => { setRetry(true) }}>✍️ Viết lại theo mẫu</button>}
+            <button className="btn blue grow" onClick={next}>Tiếp ➜ <kbd>Enter</kbd></button>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 // ---------------------------------------------------------------- page
 export default function Convo() {
   const store = useStore()
@@ -618,7 +900,7 @@ export default function Convo() {
   const today = todayKey()
   const plan = convoDays[today]?.plan
   // Today's routine is made once (after the level is known) and kept for the day
-  useEffect(() => { if (D && convo.placed && (!plan || !plan.role)) todayPlan(D) }, [D, convo.placed, plan])
+  useEffect(() => { if (D && convo.placed && (!plan || !plan.role || !plan.long)) todayPlan(D) }, [D, convo.placed, plan])
   if (!D) return <div className="page center"><Mascot size={90} mood="think" /><p className="muted">Đang tải bài giao tiếp…</p></div>
 
   if (!convo.placed && view === 'home') return (
@@ -703,6 +985,8 @@ export default function Convo() {
         {step === 'speak' && <SpeakStep key={step} id={plan.speak} {...props} />}
         {step === 'role' && <RoleplayStep key={step} id={plan.role} {...props} />}
         {step === 'explain' && <ExplainStep key={step} id={plan.explain} {...props} />}
+        {step === 'long' && <LongStep key={step} ids={ids} {...props} />}
+        {step === 'dialog' && <DialogStep key={step} ids={ids} {...props} />}
         {levelUp && <LevelUp info={levelUp} onClose={() => setLevelUp(null)} />}
       </div>
     )
@@ -713,7 +997,10 @@ export default function Convo() {
   const totalSteps = steps.reduce((a, k) => a + stepLen(k), 0)
   const doneSteps = steps.reduce((a, k) => a + stepDone(k), 0)
   const days14 = Array.from({ length: 14 }, (_, k) => addDays(today, k - 13))
-  const QUEST_TONE = { phrases: 'q-yellow', review: 'q-blue', role: 'q-pink', fresh: 'q-green', ask: 'q-blue', reflex: 'q-yellow', explain: 'q-pink', speak: 'q-green' }
+  const QUEST_TONE = { phrases: 'q-yellow', review: 'q-blue', long: 'q-green', dialog: 'q-pink', role: 'q-pink', fresh: 'q-green', ask: 'q-blue', reflex: 'q-yellow', explain: 'q-pink', speak: 'q-green' }
+  const todayPct = totalSteps ? Math.round((doneSteps / totalSteps) * 100) : 0
+  const minutesLeft = Math.max(1, Math.round(steps.reduce((a, k) => a + (stepLen(k) - Math.min(stepDone(k), stepLen(k))) * (MINUTES[k] || 1), 0)))
+  const mode = intensityOf(convo)
   return (
     <div className="page talk">
       <section className="card talk-hero2">
@@ -743,7 +1030,19 @@ export default function Convo() {
           <h2>🗓️ Nhiệm vụ hôm nay</h2>
           <span className={`pill ${day.n >= MIN_PER_DAY ? 'green' : 'pink'}`}>{day.n}/{MIN_PER_DAY} câu tối thiểu {day.n >= MIN_PER_DAY ? '✓ giữ chuỗi' : ''}</span>
         </div>
-        <div className="today-progress"><div style={{ width: `${totalSteps ? (doneSteps / totalSteps) * 100 : 0}%` }} /><span>{doneSteps}/{totalSteps} phần · +{day.xp} XP hôm nay</span></div>
+        <div className="today-progress"><div style={{ width: `${todayPct}%` }} /><span><b>{todayPct}%</b> · {doneSteps}/{totalSteps} phần · +{day.xp} XP hôm nay</span></div>
+        <div className="intensity" role="group" aria-label="Cường độ luyện tập">
+          <span className="muted small">Cường độ:</span>
+          {Object.entries(INTENSITY).map(([k, m]) => (
+            <button key={k} className={`seg ${mode === k ? 'on' : ''}`} onClick={() => setIntensity(k)} title={`${m.long} câu dài mới + ${m.dlg} đối đáp mỗi ngày`}>
+              {k === 'max' ? '🚀 ' : k === 'fast' ? '⚡ ' : ''}{m.name}<small>{m.sub}</small>
+            </button>
+          ))}
+        </div>
+        {lvl.cefr < 2 && (
+          <p className="tip-box small">🎯 Bạn đã có khoảng <b>TOEIC 550+</b>? Học thẳng từ <b>B1</b> để câu dài và khó hơn ngay:{' '}
+            <button className="btn sm yellow" onClick={() => { setStart(2); if (!day.n) setState((s) => { const d = { ...s.convoDays[today] }; delete d.plan; return { convoDays: { ...s.convoDays, [today]: d } } }) }}>Chuyển lên B1</button></p>
+        )}
         <div className="quest-grid">
           {steps.map((k) => {
             const ok = stepDone(k) >= stepLen(k)
@@ -759,7 +1058,7 @@ export default function Convo() {
           })}
         </div>
         {!allDone
-          ? <button className="btn start-btn" onClick={() => startStep(steps.find((k) => stepDone(k) < stepLen(k)), true)}><span>▶ Luyện tiếp nhiệm vụ hôm nay</span><small>~15 phút · thưởng XP khi xong hết</small></button>
+          ? <button className="btn start-btn" onClick={() => startStep(steps.find((k) => stepDone(k) < stepLen(k)), true)}><span>▶ Luyện tiếp nhiệm vụ hôm nay</span><small>còn ~{minutesLeft} phút · thưởng XP khi xong hết</small></button>
           : <p className="celebrate">🎉 Xong nhiệm vụ hôm nay! Chơi thêm ⚡ Thử thách 60 giây hoặc mai quay lại ôn đúng lúc nhé.</p>}
       </section>
 
@@ -798,11 +1097,13 @@ export default function Convo() {
           </ul>
         </section>
         <section className="card">
-          <h2>📈 14 ngày qua</h2>
+          <h2>📈 14 ngày qua <small className="muted">· % nhiệm vụ đã xong</small></h2>
           <div className="streak-cal">
             {days14.map((d) => {
               const n = convoDays[d]?.n || 0
-              return <div key={d} className={`sc ${n >= MIN_PER_DAY ? 'on' : n ? 'half' : ''} ${d === today ? 'today' : ''}`} title={`${d}: ${n} câu`}><span>{VI_DAYS[fromKey(d).getDay()]}</span><b>{n || ''}</b></div>
+              const pp = planProgress(convoDays[d])
+              const pc = pp ? Math.round(pp.pct * 100) : 0
+              return <div key={d} className={`sc ${n >= MIN_PER_DAY ? 'on' : n ? 'half' : ''} ${d === today ? 'today' : ''}`} title={`${d}: ${n} câu · xong ${pc}% nhiệm vụ`}><i style={{ height: `${pc}%` }} /><span>{VI_DAYS[fromKey(d).getDay()]}</span><b>{pc ? `${pc}%` : ''}</b></div>
             })}
           </div>
           <label className="row gap-s small">Câu mới mỗi ngày
@@ -813,7 +1114,7 @@ export default function Convo() {
           <button className="link small" onClick={() => setView('test')}>📝 Làm lại bài kiểm tra xếp cấp</button>
         </section>
       </div>
-      <p className="muted small source-note">Câu dịch: <a href="https://tatoeba.org" target="_blank" rel="noreferrer">Tatoeba</a> (CC BY 2.0 FR) · Hội thoại phản xạ: DailyDialog (Li et al. 2017, CC BY-NC-SA 4.0) · Cấp độ ước lượng theo NGSL (CC BY-SA 4.0) · Mẫu câu, nhập vai & Diễn đạt ý: Capy TOEIC.</p>
+      <p className="muted small source-note">Câu dịch: <a href="https://tatoeba.org" target="_blank" rel="noreferrer">Tatoeba</a> (CC BY 2.0 FR) · Hội thoại phản xạ: DailyDialog (Li et al. 2017, CC BY-NC-SA 4.0) · Cấp độ ước lượng theo NGSL (CC BY-SA 4.0) · Mẫu câu, nhập vai, Diễn đạt ý, câu dài & đối đáp: Capy TOEIC.</p>
     </div>
   )
 }

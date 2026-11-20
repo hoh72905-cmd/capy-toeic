@@ -1,6 +1,6 @@
 // Numbers for the Giao tiếp statistics page, all derived from the day log and the review state.
 import { todayKey, addDays, weekKeys, diffDays } from './date.js'
-import { levelInfo, streak, accuracy, SKILLS, MIN_PER_DAY, STAGES } from './convo.js'
+import { levelInfo, streak, accuracy, SKILLS, MIN_PER_DAY, STAGES, planProgress } from './convo.js'
 
 const sumPair = (list) => list.reduce((a, p) => [a[0] + (p?.[0] || 0), a[1] + (p?.[1] || 0)], [0, 0])
 const avg = (p) => (p[1] ? p[0] / p[1] : null)
@@ -25,8 +25,8 @@ export const MASTERY = [
   { key: 'solid', name: 'Khá chắc', test: (b) => b === 4 },
   { key: 'mastered', name: 'Thuộc lòng', test: (b) => b >= 5 },
 ]
-const TYPE_OF = (id) => (id.startsWith('rp') ? 'role' : id[0] === 't' ? 'tr' : id[0] === 'r' ? 'rf' : id[0] === 'p' ? 'phrase' : id[0] === 'e' ? 'ex' : null)
-export const TYPE_NAME = { tr: 'Câu dịch', rf: 'Câu phản xạ', phrase: 'Mẫu câu', role: 'Hội thoại', ex: 'Diễn đạt ý' }
+const TYPE_OF = (id) => (id.startsWith('rp') ? 'role' : id[0] === 't' ? 'tr' : id[0] === 'r' ? 'rf' : id[0] === 'p' ? 'phrase' : id[0] === 'e' ? 'ex' : id[0] === 'L' ? 'long' : id[0] === 'D' ? 'dlg' : null)
+export const TYPE_NAME = { tr: 'Câu dịch', long: 'Câu dài', dlg: 'Đối đáp dài', rf: 'Câu phản xạ', phrase: 'Mẫu câu', role: 'Hội thoại', ex: 'Diễn đạt ý' }
 
 export function convoStats(state, today = todayKey()) {
   const { convoDays: days = {}, convoItems: items = {}, convo = {} } = state
@@ -36,7 +36,10 @@ export function convoStats(state, today = todayKey()) {
   const daily = Array.from({ length: 30 }, (_, k) => {
     const d = addDays(today, k - 29)
     const x = days[d] || {}
-    return { d, n: x.n || 0, ok: x.ok || 0, xp: x.xp || 0, rt: avg(x.rt || [0, 0]), tt: avg(x.tt || [0, 0]) }
+    // Days from before the plan summary was kept: estimate from the sentences done (a full day is ~15)
+    const pp = planProgress(x)
+    return { d, n: x.n || 0, ok: x.ok || 0, xp: x.xp || 0, rt: avg(x.rt || [0, 0]), tt: avg(x.tt || [0, 0]),
+      plan: pp, est: !pp && x.n > 0, pct: pp ? pp.pct : Math.min(1, (x.n || 0) / (MIN_PER_DAY * 3)), acc: x.n ? x.ok / x.n : null }
   })
   // Last 12 weeks (Monday-first)
   const monday = weekKeys(today)[0]

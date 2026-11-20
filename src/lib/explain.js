@@ -2,9 +2,9 @@
 // looks at what a teacher would: did you get the key ideas across, did you link them (because, so,
 // however…), and did you say enough for your level. Runs live while the learner types.
 
-const VI_CHARS = /[ăâđêôơưàáạảãèéẹẻẽìíịỉĩòóọỏõùúụủũỳýỵỷỹ]/i
+export const VI_CHARS = /[ăâđêôơưàáạảãèéẹẻẽìíịỉĩòóọỏõùúụủũỳýỵỷỹ]/i
 // Linking words and phrases, from simple to advanced
-const CONNECT = [
+export const CONNECT = [
   'because', 'so', 'but', 'then', 'also', 'first', 'finally', 'after that', 'for example', 'for instance', 'if', 'when',
   'since', 'however', 'although', 'though', 'instead', 'otherwise', 'unless', 'while', 'whereas', "that's why", 'as a result',
   'on the other hand', 'therefore', 'moreover', 'in my view', 'i think', 'i believe', 'overall', 'ultimately', 'which means', 'so that',
@@ -13,9 +13,9 @@ const CONNECT = [
 export const TARGET_WORDS = [12, 20, 30, 40, 50, 60]
 export const TARGET_LINKS = [1, 1, 2, 2, 3, 3]
 
-const norm = (t) => ` ${t.toLowerCase().replace(/[’‘`]/g, "'").replace(/[^a-z0-9%' -]+/g, ' ').replace(/\s+/g, ' ').trim()} `
+export const norm = (t) => ` ${t.toLowerCase().replace(/[’‘`]/g, "'").replace(/[^a-z0-9%' -]+/g, ' ').replace(/\s+/g, ' ').trim()} `
 
-function has(text, words, kw) {
+export function has(text, words, kw) {
   if (/[ -]/.test(kw)) return text.includes(` ${kw}`)
   if (kw.length <= 3) return words.includes(kw)
   return words.some((w) => w.startsWith(kw))

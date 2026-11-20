@@ -31,12 +31,13 @@ function Tip({ tip }) {
   return <div className="chart-tip" style={{ left: tip.x, top: tip.y }}><b>{tip.title}</b><span>{tip.text}</span></div>
 }
 
-/** Bars. data: [{ label, value, title, text }]; goal draws a dashed reference line. */
-export function BarChart({ data, height = 170, goal, goalLabel, tickEvery = 5, ariaLabel }) {
+/** Bars. data: [{ label, value, title, text, dim }]; goal draws a dashed reference line.
+ *  max/ticks/fmt set a fixed scale (e.g. 0–100 %); valueAt prints the value above that bar. */
+export function BarChart({ data, height = 170, goal, goalLabel, tickEvery = 5, ariaLabel, max: maxIn, ticks, fmt = (v) => v, padL = 28, valueAt = -1 }) {
   const [ref, w] = useWidth()
   const [tip, setTip] = useState(null)
-  const padL = 28, padB = 22, padT = 10
-  const max = niceMax(Math.max(goal || 0, ...data.map((d) => d.value)))
+  const padB = 22, padT = 16
+  const max = maxIn ?? niceMax(Math.max(goal || 0, ...data.map((d) => d.value)))
   const innerW = Math.max(0, w - padL)
   const innerH = height - padB - padT
   const step = data.length ? innerW / data.length : 0
@@ -46,10 +47,10 @@ export function BarChart({ data, height = 170, goal, goalLabel, tickEvery = 5, a
     <div className="chart" ref={ref} onMouseLeave={() => setTip(null)}>
       {w > 0 && (
         <svg width={w} height={height} role="img" aria-label={ariaLabel}>
-          {[0, max / 2, max].map((t) => (
+          {(ticks || [0, max / 2, max]).map((t) => (
             <g key={t}>
               <line x1={padL} x2={w} y1={y(t)} y2={y(t)} className="grid" />
-              <text x={padL - 6} y={y(t) + 4} className="axis" textAnchor="end">{t}</text>
+              <text x={padL - 6} y={y(t) + 4} className="axis" textAnchor="end">{fmt(t)}</text>
             </g>
           ))}
           {data.map((d, i) => {
@@ -59,6 +60,7 @@ export function BarChart({ data, height = 170, goal, goalLabel, tickEvery = 5, a
             return (
               <g key={i}>
                 {d.value > 0 && <path d={barPath(x, y(d.value), bw, h, 4)} className={`bar ${d.dim ? 'dim' : ''} ${on ? 'on' : ''}`} />}
+                {i === valueAt && d.value > 0 && <text x={x + bw / 2} y={y(d.value) - 5} className="axis bar-val" textAnchor="middle">{fmt(d.value)}</text>}
                 {(i % tickEvery === tickEvery - 1 || i === data.length - 1) && <text x={x + bw / 2} y={height - 6} className="axis" textAnchor="middle">{d.label}</text>}
                 <rect x={padL + i * step} y={padT} width={step} height={innerH} fill="transparent"
                   onMouseEnter={() => setTip({ i, x: Math.min(w - 120, Math.max(0, x - 40)), y: Math.max(0, y(d.value) - 52), title: d.title, text: d.text })}

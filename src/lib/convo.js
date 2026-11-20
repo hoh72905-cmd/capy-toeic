@@ -8,6 +8,7 @@ import { review, isDue } from './srs.js'
 import { PHRASES } from '../data/convoPhrases.js'
 import { ROLEPLAYS } from '../data/roleplay.js'
 import { EXPLAIN } from '../data/explain.js'
+import { LONG_TR, LONG_DLG } from '../data/convoLong.js'
 
 export const CEFR = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2']
 export const CEFR_VI = ['Mới bắt đầu', 'Sơ cấp', 'Trung cấp', 'Trung cao cấp', 'Cao cấp', 'Thành thạo']
@@ -64,26 +65,59 @@ function pickNew(list, items, cefr, count, extra = () => true) {
   return out.map((x) => x.id)
 }
 
+// How hard the day is: more long sentences and reviews at the higher settings
+export const INTENSITY = {
+  normal: { name: 'Thường', sub: '~20 phút/ngày', long: 3, longRev: 6, dlg: 2, dlgRev: 3, rev: 10 },
+  fast: { name: 'Tăng tốc', sub: '~30 phút/ngày', long: 5, longRev: 10, dlg: 3, dlgRev: 5, rev: 15 },
+  max: { name: 'Cấp tốc', sub: '~45 phút/ngày', long: 8, longRev: 16, dlg: 4, dlgRev: 8, rev: 20 },
+}
+export const intensityOf = (convo = getState().convo) => INTENSITY[convo.intensity] ? convo.intensity : 'max'
+const wordsOf = (x) => x.en[0].split(' ').length
+
+// Long sentences start at B1 whatever the level (the learner aims at TOEIC 600+), and follow the level up to C1
+function pickLevelled(list, items, lv, count) {
+  const out = []
+  for (const l of [lv, lv - 1, lv + 1, lv - 2, lv + 2]) for (const x of list) { if (out.length >= count) break; if (x.lv === l && !items[x.id]) out.push(x.id) }
+  return out
+}
+export function buildLong(state = getState(), date = todayKey()) {
+  const { convo, convoItems: items } = state
+  const { cefr } = levelInfo(convo)
+  const m = INTENSITY[intensityOf(convo)]
+  const lv = Math.max(2, Math.min(4, cefr))
+  const due = (p) => Object.entries(items).filter(([id, s]) => id.startsWith(p) && !s.bad && isDue(s) && s.added && s.added < date)
+    .sort((a, b) => (a[1].due || '').localeCompare(b[1].due || '') || (a[1].box || 0) - (b[1].box || 0)).map(([id]) => id)
+  return {
+    long: [...due('L').slice(0, m.longRev), ...pickLevelled(LONG_TR, items, lv, m.long)],
+    dialog: [...due('D').slice(0, m.dlgRev), ...pickLevelled(LONG_DLG, items, lv, m.dlg)],
+  }
+}
+
 export function buildPlan(D, state = getState(), date = todayKey()) {
   const { convo, convoItems: items } = state
   const { cefr } = levelInfo(convo)
   const per = Math.max(5, Math.min(10, convo.daily || 7))
+  const m = INTENSITY[intensityOf(convo)]
+  // From B1 up (and not on "Thường"), skip the very short sentences: at least 7 words
+  const longer = intensityOf(convo) !== 'normal' && cefr >= 2
   const due = Object.entries(items).filter(([id, s]) => !s.bad && isDue(s) && s.added && s.added < date && !id.startsWith('p'))
     .sort((a, b) => (a[1].due || '').localeCompare(b[1].due || '') || (a[1].box || 0) - (b[1].box || 0)).map(([id]) => id)
-  const reviewTr = due.filter((id) => id.startsWith('t')).slice(0, 10)
+  const reviewTr = due.filter((id) => id.startsWith('t')).slice(0, m.rev)
   const reviewRf = due.filter((id) => /^r\d/.test(id)).slice(0, 3)
   const phraseDue = PHRASES.filter((p) => items[p.id] && isDue(items[p.id]) && p.lv <= cefr + 1).map((p) => p.id)
   const phraseNew = PHRASES.filter((p) => !items[p.id] && p.lv <= cefr).map((p) => p.id)
   return {
     role: pickRole(items, cefr, date),
     review: reviewTr,
-    fresh: pickNew(D.tr, items, cefr, per, (x) => !x.q),
+    fresh: longer ? fillUp(pickNew(D.tr, items, cefr, per, (x) => !x.q && wordsOf(x) >= 7), () => pickNew(D.tr, items, cefr, per, (x) => !x.q), per) : pickNew(D.tr, items, cefr, per, (x) => !x.q),
     ask: pickNew(D.tr, items, cefr, 2, (x) => x.q),
     reflex: [...pickNew(D.rf, items, cefr, 5 - Math.min(2, reviewRf.length)), ...reviewRf.slice(0, 2)],
     phrases: [...phraseDue.slice(0, 3), ...phraseNew].slice(0, 3),
     explain: pickExplain(items, cefr, date),
+    ...buildLong(state, date),
   }
 }
+const fillUp = (ids, more, n) => [...new Set([...ids, ...more()])].slice(0, n)
 
 // "Diễn đạt ý" of the day: one due for review, else the next new one at (or near) the level
 export function pickExplain(items, cefr, date = todayKey()) {
@@ -115,11 +149,11 @@ export const roleUnlocked = (r, cefr) => r.lv <= cefr + 1
 export function todayPlan(D) {
   const date = todayKey()
   const day = getState().convoDays[date]
-  if (day?.plan && day.plan.role && day.plan.explain) return day.plan
+  if (day?.plan && day.plan.role && day.plan.explain && day.plan.long) return day.plan
   if (day?.plan) { // made by an older version: add what it lacks
     const { cefr } = levelInfo()
     const items = getState().convoItems
-    const add = { role: day.plan.role || pickRole(items, cefr, date), explain: day.plan.explain || pickExplain(items, cefr, date) }
+    const add = { role: day.plan.role || pickRole(items, cefr, date), explain: day.plan.explain || pickExplain(items, cefr, date), ...(day.plan.long ? {} : buildLong(getState(), date)) }
     setState((s) => ({ convoDays: { ...s.convoDays, [date]: { ...s.convoDays[date], plan: { ...s.convoDays[date].plan, ...add } } } }))
     return { ...day.plan, ...add }
   }
@@ -128,17 +162,44 @@ export function todayPlan(D) {
   return plan
 }
 
+// Change the intensity; today's long sentences and replies follow at once (finished ones stay)
+export function setIntensity(key) {
+  setState((s) => ({ convo: { ...s.convo, intensity: key } }))
+  const date = todayKey()
+  const s = getState()
+  const day = s.convoDays[date]
+  if (!day?.plan) return
+  const fresh = buildLong(s, date)
+  const keep = (k, kind) => (day.plan[k] || []).filter((id) => (day.done?.[kind] || []).includes(id))
+  const plan = { ...day.plan, long: [...new Set([...keep('long', 'long'), ...fresh.long])], dialog: [...new Set([...keep('dialog', 'dialog'), ...fresh.dialog])] }
+  setState((st) => ({ convoDays: { ...st.convoDays, [date]: { ...st.convoDays[date], plan } } }))
+}
+
+// Share of today's plan that is done (used by the dashboard and the statistics). Old plans had a
+// speaking prompt instead of "Diễn đạt ý".
+const PLAN_KIND = { phrases: 'phrase', review: 'review', long: 'long', dialog: 'dialog', role: 'role', fresh: 'fresh', ask: 'ask', reflex: 'reflex', explain: 'explain' }
+export function planProgress(day) {
+  const p = day?.plan
+  if (!p) return day?.pd ? { done: day.pd[0], total: day.pd[1], pct: day.pd[1] ? day.pd[0] / day.pd[1] : 0 } : null
+  let total = 0, done = 0
+  const add = (ids, kind) => { total += ids.length; done += ids.filter((id) => (day.done?.[kind] || []).includes(id)).length }
+  for (const [k, kind] of Object.entries(PLAN_KIND)) add(k === 'role' || k === 'explain' ? (p[k] ? [p[k]] : []) : p[k] || [], kind)
+  if (!p.explain && p.speak) add([p.speak], 'speak')
+  return { total, done, pct: total ? done / total : 0 }
+}
+
 // ---- recording answers ----
 const VERDICT_GRADE = { right: 2, close: 1, wrong: 0 }
-const BASE_XP = { fresh: 10, ask: 10, review: 6, reflex: 5, phrase: 2, speak: 20, roleTurn: 8, role: 15, explain: 20 }
+const BASE_XP = { fresh: 10, ask: 10, review: 6, reflex: 5, phrase: 2, speak: 20, roleTurn: 8, role: 15, explain: 20, long: 15, dialog: 18, drill: 3 }
 // Skill each kind of answer trains (for the statistics page)
-const SKILL_OF = { fresh: 'tr', review: 'tr', ask: 'ask', reflex: 'rf', roleTurn: 'role', explain: 'ex' }
+const SKILL_OF = { fresh: 'tr', review: 'tr', ask: 'ask', reflex: 'rf', roleTurn: 'role', explain: 'ex', long: 'long', dialog: 'dlg' }
 export const SKILLS = [
   ['tr', '✍️', 'Dịch & nói câu'], ['listen', '🎧', 'Nghe & nhắc lại'], ['ask', '❓', 'Đặt câu hỏi'],
   ['rf', '⚡', 'Phản xạ đáp lời'], ['role', '🎭', 'Hội thoại'], ['ex', '🧩', 'Diễn đạt ý'],
+  ['long', '📜', 'Câu dài'], ['dlg', '🗣️', 'Đối đáp câu dài'],
 ]
 const addPair = (p, a, b = 1) => [(p?.[0] || 0) + a, (p?.[1] || 0) + b]
-const NO_SRS = new Set(['speak', 'roleTurn']) // a role-play turn is graded, the whole dialogue gets the review date
+const NO_SRS = new Set(['speak', 'roleTurn', 'drill']) // a role-play turn is graded, the whole dialogue gets the review date
 
 /**
  * Record one answer. kind: fresh | ask | review | reflex | phrase | speak | roleTurn | role | explain.
@@ -153,7 +214,7 @@ export function recordAnswer(id, kind, verdict, { fast = false, alt, ms, skill, 
   setState((s) => {
     const convo = { ...s.convo }
     const val = score ?? (verdict === 'right' ? 1 : verdict === 'close' ? 0.6 : 0)
-    if (kind !== 'phrase' && kind !== 'speak' && kind !== 'role') convo.recent = [...(convo.recent || []), val].slice(-20)
+    if (kind !== 'phrase' && kind !== 'speak' && kind !== 'role' && kind !== 'drill') convo.recent = [...(convo.recent || []), val].slice(-20)
     const mult = 0.6 + 0.8 * accuracy(convo) // 0.6× … 1.4×
     gained = Math.round((verdict === 'wrong' ? 2 : BASE_XP[kind] * (verdict === 'close' ? 0.7 : 1) + (fast ? 2 : 0)) * (kind === 'phrase' || kind === 'speak' || kind === 'role' ? 1 : mult))
     convo.xp = (convo.xp || 0) + gained
@@ -161,7 +222,7 @@ export function recordAnswer(id, kind, verdict, { fast = false, alt, ms, skill, 
     const next = NO_SRS.has(kind) ? { ...prev, last: date, seen: (prev.seen || 0) + 1 } : review(prev, VERDICT_GRADE[verdict])
     if (alt) next.alt = [...new Set([...(prev.alt || []), alt])].slice(-3)
     const day = { n: 0, ok: 0, xp: 0, done: {}, ...(s.convoDays[date] || {}) }
-    const counts = kind === 'fresh' || kind === 'ask' || kind === 'review' || kind === 'roleTurn' || kind === 'explain'
+    const counts = kind === 'fresh' || kind === 'ask' || kind === 'review' || kind === 'roleTurn' || kind === 'explain' || kind === 'long' || kind === 'dialog'
     day.n += counts ? 1 : 0
     day.ok += counts && verdict !== 'wrong' ? 1 : 0
     day.xp += gained
